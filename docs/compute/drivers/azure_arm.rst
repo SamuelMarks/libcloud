@@ -16,7 +16,7 @@ Connecting to Azure
 -------------------
 
 To connect to Azure you need your tenant ID and subscription ID.  Using the
-Azure cross platform CLI, use ``azure account list`` to get these
+[Azure CLI 2.0](https://github.com/Azure/azure-cli), use ``az account list`` to get these
 values.
 
 Creating a Service Principal
@@ -30,6 +30,81 @@ https://azure.microsoft.com/en-us/documentation/articles/resource-group-authenti
   azure ad app create --display-name "<Your Application Display Name>" --homepage "<https://YourApplicationHomePage>" --identifier-uris "<https://YouApplicationUri>" --password <Your_Password>
   azure ad sp create --id "<Application_Id>"
   azure role assignment create --assignee "<Object_Id>" --role Owner --scope /subscriptions/{subscriptionId}/
+
+
+.. sourcecode:: bash
+
+  $ az ad app create --display-name t0 --identifier-uris "<https://YourApplicationHomePage>" --password sdfsdfs --homepage "<https://YourApplicationHomePage>"
+  {
+    "appId": "azAdAppCreateAppId",
+    "appPermissions": null,
+    "availableToOtherTenants": false,
+    "displayName": "t0",
+    "homepage": "<https://YourApplicationHomePage>",
+    "identifierUris": [
+      "<https://YourApplicationHomePage>"
+    ],
+    "objectId": "azAdAppCreateObjectId",
+    "objectType": "Application",
+    "replyUrls": []
+  }
+  $ az ad sp create --id azAdAppCreateAppId
+  {
+    "appId": "azAdAppCreateAppId",
+    "displayName": "t0",
+    "objectId": "azAdSpCreateObjectId",
+    "objectType": "ServicePrincipal",
+    "servicePrincipalNames": [
+      "azAdAppCreateAppId",
+      "<https://YourApplicationHomePage>"
+    ]
+  }
+  $ az role definition list | python -c 'import json,sys;obj=json.load(sys.stdin); print next(o["id"] for o in obj if o["properties"]["description"] == "Lets you manage everything, including access to resources.");'
+  /subscriptions/azRoleDefListSubscriptionChosen/providers/Microsoft.Authorization/roleDefinitions/foundSubscriptionId
+  $ # choose location from: `az account list-locations --query [].name`
+  $ az group create -n Spon0 -l australiasoutheast
+  {
+    "id": "/subscriptions/azRoleDefListSubscriptionChosen/resourceGroups/Spon0",
+    "location": "australiasoutheast",
+    "managedBy": null,
+    "name": "Spon0",
+    "properties": {
+      "provisioningState": "Succeeded"
+    },
+    "tags": null
+  }
+  $ # Create role with relevant subscription from `az account list`:
+  $ az role definition create --role-definition '{"AssignableScopes": ["/subscriptions/chosenSubscriptionId"], "Name": "All hands", "Actions": ["Microsoft.Compute/*/read", "Microsoft.Compute/virtualMachines/start/action", "Microsoft.Compute/virtualMachines/restart/action", "Microsoft.Network/*/read", "Microsoft.Storage/*/read", "Microsoft.Authorization/*/read", "Microsoft.Resources/subscriptions/resourceGroups/read", "Microsoft.Resources/subscriptions/resourceGroups/resources/read", "Microsoft.Insights/alertRules/*", "Microsoft.Support/*"], "Description": "Can monitor compute, network and storage, and restart virtual machines"}'
+  {
+    "id": "/subscriptions/chosenSubscriptionId/providers/Microsoft.Authorization/roleDefinitions/roleDefName",
+    "name": "roleDefName",
+    "properties": {
+      "assignableScopes": [
+        "/subscriptions/chosenSubscriptionId"
+      ],
+      "description": "Can monitor compute, network and storage, and restart virtual machines",
+      "permissions": [
+        {
+          "actions": [
+            "Microsoft.Compute/*/read",
+            "Microsoft.Compute/virtualMachines/start/action",
+            "Microsoft.Compute/virtualMachines/restart/action",
+            "Microsoft.Network/*/read",
+            "Microsoft.Storage/*/read",
+            "Microsoft.Authorization/*/read",
+            "Microsoft.Resources/subscriptions/resourceGroups/read",
+            "Microsoft.Resources/subscriptions/resourceGroups/resources/read",
+            "Microsoft.Insights/alertRules/*",
+            "Microsoft.Support/*"
+          ],
+          "notActions": []
+        }
+      ],
+      "roleName": "All hands",
+      "type": "CustomRole"
+    },
+    "type": "Microsoft.Authorization/roleDefinitions"
+  }
 
 Instantiating a driver
 ~~~~~~~~~~~~~~~~~~~~~~
