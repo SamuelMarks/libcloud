@@ -1,9 +1,9 @@
 DigitalOcean Compute Driver Documentation
 =========================================
 
-`DigitalOcean`_ is an American virtual private server provider based in New York
-City with data centers in New York, Amsterdam, San Francisco, London and
-Singapore.
+`DigitalOcean`_ is an American cloud provider based in New York City with data
+centers in New York, Amsterdam, San Francisco, London, Singapore, Frankfurt,
+Toronto, and Bangalore.
 
 .. figure:: /_static/images/provider_logos/digitalocean.png
     :align: center
@@ -13,9 +13,9 @@ Singapore.
 Instantiating a driver
 ----------------------
 
-DigitalOcean driver supports two API versions - old API v1.0 and the new API
-v2.0 which is currently in beta. Since trunk (to be libcloud v0.18.0), the
-driver uses new API v2.0 by default.
+The DigitalOcean driver supports API v2.0, requiring a Personal Access
+Token to initialize as the key. The older API v1.0 `reached end of life on
+November 9, 2015`_. Support for API v1.0 was removed in libcloud v1.2.2.
 
 Instantiating a driver using API v2.0
 -------------------------------------
@@ -23,10 +23,10 @@ Instantiating a driver using API v2.0
 .. literalinclude:: /examples/compute/digitalocean/instantiate_api_v2.0.py
    :language: python
 
-Instantiating a driver using API v1.0
--------------------------------------
+Creating a Droplet using API v2.0
+---------------------------------
 
-.. literalinclude:: /examples/compute/digitalocean/instantiate_api_v1.0.py
+.. literalinclude:: /examples/compute/digitalocean/create_api_v2.0.py
    :language: python
 
 API Docs
@@ -39,11 +39,6 @@ API v2.0
     :members:
     :inherited-members:
 
-API v1.0
-~~~~~~~~
-
-.. autoclass:: libcloud.compute.drivers.digitalocean.DigitalOcean_v1_NodeDriver
-    :members:
-    :inherited-members:
 
 .. _`DigitalOcean`: https://www.digitalocean.com/
+.. _`reached end of life on November 9, 2015`: https://developers.digitalocean.com/documentation/changelog/api-v1/sunsetting-api-v1/

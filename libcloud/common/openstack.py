@@ -17,11 +17,7 @@
 Common utilities for OpenStack
 """
 
-try:
-    from lxml import etree as ET
-except ImportError:
-    from xml.etree import ElementTree as ET
-
+from libcloud.utils.py3 import ET
 from libcloud.utils.py3 import httplib
 
 from libcloud.common.base import ConnectionUserAndKey, Response
@@ -31,7 +27,8 @@ from libcloud.compute.types import KeyPairDoesNotExistError
 from libcloud.common.openstack_identity import get_class_for_auth_version
 
 # Imports for backward compatibility reasons
-from libcloud.common.openstack_identity import OpenStackServiceCatalog
+from libcloud.common.openstack_identity import (OpenStackServiceCatalog,
+                                                OpenStackIdentityTokenScope)
 
 
 try:
@@ -74,40 +71,57 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
     :type secure: ``bool``
 
     :param ex_force_base_url: Base URL for connection requests.  If
-    not specified, this will be determined by authenticating.
+                              not specified, this will be determined by
+                              authenticating.
     :type ex_force_base_url: ``str``
 
     :param ex_force_auth_url: Base URL for authentication requests.
     :type ex_force_auth_url: ``str``
 
     :param ex_force_auth_version: Authentication version to use.  If
-    not specified, defaults to AUTH_API_VERSION.
+                                  not specified, defaults to AUTH_API_VERSION.
     :type ex_force_auth_version: ``str``
 
-    :param ex_force_auth_token: Authentication token to use for
-    connection requests.  If specified, the connection will not attempt
-    to authenticate, and the value of ex_force_base_url will be used to
-    determine the base request URL.  If ex_force_auth_token is passed in,
-    ex_force_base_url must also be provided.
+    :param ex_force_auth_token: Authentication token to use for connection
+                                requests.  If specified, the connection will
+                                not attempt to authenticate, and the value
+                                of ex_force_base_url will be used to
+                                determine the base request URL.  If
+                                ex_force_auth_token is passed in,
+                                ex_force_base_url must also be provided.
     :type ex_force_auth_token: ``str``
 
-    :param ex_tenant_name: When authenticating, provide this tenant
-    name to the identity service.  A scoped token will be returned.
-    Some cloud providers require the tenant name to be provided at
-    authentication time.  Others will use a default tenant if none
-    is provided.
+    :param token_scope: Whether to scope a token to a "project", a
+                        "domain" or "unscoped".
+    :type token_scope: ``str``
+
+    :param ex_domain_name: When authenticating, provide this domain name to
+                           the identity service.  A scoped token will be
+                           returned. Some cloud providers require the domain
+                           name to be provided at authentication time. Others
+                           will use a default domain if none is provided.
+    :type ex_domain_name: ``str``
+
+    :param ex_tenant_name: When authenticating, provide this tenant name to the
+                           identity service. A scoped token will be returned.
+                           Some cloud providers require the tenant name to be
+                           provided at authentication time. Others will use a
+                           default tenant if none is provided.
     :type ex_tenant_name: ``str``
 
     :param ex_force_service_type: Service type to use when selecting an
-    service.  If not specified, a provider specific default will be used.
+                                  service. If not specified, a provider
+                                  specific default will be used.
     :type ex_force_service_type: ``str``
 
     :param ex_force_service_name: Service name to use when selecting an
-    service.  If not specified, a provider specific default will be used.
+                                  service. If not specified, a provider
+                                  specific default will be used.
     :type ex_force_service_name: ``str``
 
-    :param ex_force_service_region: Region to use when selecting an
-    service.  If not specified, a provider specific default will be used.
+    :param ex_force_service_region: Region to use when selecting an service.
+                                    If not specified, a provider specific
+                                    default will be used.
     :type ex_force_service_region: ``str``
     """
 
@@ -119,20 +133,25 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
     service_type = None
     service_name = None
     service_region = None
+    accept_format = None
     _auth_version = None
 
     def __init__(self, user_id, key, secure=True,
-                 host=None, port=None, timeout=None,
+                 host=None, port=None, timeout=None, proxy_url=None,
                  ex_force_base_url=None,
                  ex_force_auth_url=None,
                  ex_force_auth_version=None,
                  ex_force_auth_token=None,
+                 ex_token_scope=OpenStackIdentityTokenScope.PROJECT,
+                 ex_domain_name='Default',
                  ex_tenant_name=None,
                  ex_force_service_type=None,
                  ex_force_service_name=None,
-                 ex_force_service_region=None):
+                 ex_force_service_region=None,
+                 retry_delay=None, backoff=None):
         super(OpenStackBaseConnection, self).__init__(
-            user_id, key, secure=secure, timeout=timeout)
+            user_id, key, secure=secure, timeout=timeout,
+            retry_delay=retry_delay, backoff=backoff, proxy_url=proxy_url)
 
         if ex_force_auth_version:
             self._auth_version = ex_force_auth_version
@@ -140,6 +159,8 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
         self._ex_force_base_url = ex_force_base_url
         self._ex_force_auth_url = ex_force_auth_url
         self._ex_force_auth_token = ex_force_auth_token
+        self._ex_token_scope = ex_token_scope
+        self._ex_domain_name = ex_domain_name
         self._ex_tenant_name = ex_tenant_name
         self._ex_force_service_type = ex_force_service_type
         self._ex_force_service_name = ex_force_service_name
@@ -177,6 +198,8 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
                             user_id=self.user_id,
                             key=self.key,
                             tenant_name=self._ex_tenant_name,
+                            domain_name=self._ex_domain_name,
+                            token_scope=self._ex_token_scope,
                             timeout=self.timeout,
                             parent_conn=self)
 
@@ -216,6 +239,18 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
             self._populate_hosts_and_request_paths()
 
         return self.service_catalog
+
+    def get_service_name(self):
+        """
+        Gets the service name used to look up the endpoint in the service
+        catalog.
+
+        :return: name of the service in the catalog
+        """
+        if self._ex_force_service_name:
+            return self._ex_force_service_name
+
+        return self.service_name
 
     def get_endpoint(self):
         """
@@ -258,6 +293,7 @@ class OpenStackBaseConnection(ConnectionUserAndKey):
     def _set_up_connection_info(self, url):
         result = self._tuple_from_url(url)
         (self.host, self.port, self.secure, self.request_path) = result
+        self.connect()
 
     def _populate_hosts_and_request_paths(self):
         """
@@ -379,6 +415,8 @@ class OpenStackDriverMixin(object):
         self._ex_force_auth_url = kwargs.get('ex_force_auth_url', None)
         self._ex_force_auth_version = kwargs.get('ex_force_auth_version', None)
         self._ex_force_auth_token = kwargs.get('ex_force_auth_token', None)
+        self._ex_token_scope = kwargs.get('ex_token_scope', None)
+        self._ex_domain_name = kwargs.get('ex_domain_name', None)
         self._ex_tenant_name = kwargs.get('ex_tenant_name', None)
         self._ex_force_service_type = kwargs.get('ex_force_service_type', None)
         self._ex_force_service_name = kwargs.get('ex_force_service_name', None)
@@ -399,6 +437,10 @@ class OpenStackDriverMixin(object):
             rv['ex_force_auth_url'] = self._ex_force_auth_url
         if self._ex_force_auth_version:
             rv['ex_force_auth_version'] = self._ex_force_auth_version
+        if self._ex_token_scope:
+            rv['ex_token_scope'] = self._ex_token_scope
+        if self._ex_domain_name:
+            rv['ex_domain_name'] = self._ex_domain_name
         if self._ex_tenant_name:
             rv['ex_tenant_name'] = self._ex_tenant_name
         if self._ex_force_service_type:

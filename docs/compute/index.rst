@@ -13,7 +13,7 @@ configuration management tool (such as Puppet, Chef, or cfengine) on it.
 Besides managing cloud and virtual servers, compute component also allows you
 to manage cloud block storage (not to be confused with cloud object storage)
 for providers which support it.
-Block storage management is lives under compute API, because it is in most cases
+Block storage management lives under compute API, because it is in most cases
 tightly coupled with compute resources.
 
 Terminology
@@ -32,8 +32,8 @@ Compute
 * :class:`~libcloud.compute.base.NodeLocation` - represents a physical location
   where a server can be.
 * :class:`~libcloud.compute.types.NodeState` - represents a node state.
-  Standard states are: ``running``, ``stopped``, ``rebooting``, ``terminated``,
-  ``pending``, and ``unknown``.
+  Standard states are: ``running``, ``rebooting``, ``terminated``, ``pending``,
+  ``stopped``, ``suspended``, ``paused``, ``erro``, ``unknown``.
 
 Key Pair Management
 ~~~~~~~~~~~~~~~~~~~

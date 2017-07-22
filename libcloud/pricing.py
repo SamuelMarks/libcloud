@@ -23,7 +23,11 @@ from os.path import join as pjoin
 
 try:
     import simplejson as json
-    JSONDecodeError = json.JSONDecodeError
+    try:
+        JSONDecodeError = json.JSONDecodeError
+    except AttributeError:
+        # simplejson < 2.1.0 does not have the JSONDecodeError exception class
+        JSONDecodeError = ValueError
 except ImportError:
     import json
     JSONDecodeError = ValueError
@@ -140,7 +144,13 @@ def get_size_price(driver_type, driver_name, size_id):
     :return: Size price.
     """
     pricing = get_pricing(driver_type=driver_type, driver_name=driver_name)
-    price = float(pricing[size_id])
+
+    try:
+        price = float(pricing[size_id])
+    except KeyError:
+        # Price not available
+        price = None
+
     return price
 
 

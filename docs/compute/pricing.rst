@@ -9,7 +9,7 @@ on the :class:`NodeSize` object. :attr:`price` attribute is a :func:`float`
 type and tells user how much it costs (in US dollars) to run a ``Node`` with a
 specified :class:`NodeSize` for an hour.
 
-Example bellow shows how to retrieve pricing for ``NodeSize`` objects using
+Example below shows how to retrieve pricing for ``NodeSize`` objects using
 :func:`list_sizes` method.
 
 .. literalinclude:: /examples/compute/pricing.py
@@ -29,10 +29,10 @@ Where does the Libcloud pricing data come from?
 -----------------------------------------------
 
 Most of the providers don't provide pricing information via the API which means
-most of the pricing information is scrapped directly from the provider
+most of the pricing information is scraped directly from the provider
 websites.
 
-Pricing data which is scrapped from the provider websites is located in a
+Pricing data which is scraped from the provider websites is located in a
 JSON file (``data/pricing.json``) which is bundled with each release. This
 pricing data is only updated once you install a new release which means it
 could be out of date.

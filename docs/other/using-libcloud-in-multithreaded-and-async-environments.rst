@@ -43,7 +43,7 @@ You need to do two things when you want to use Libcloud with gevent:
 * Create a separate driver instance for each Greenlet. This is necessary
   because a driver instance reuses the same Connection class.
 
-For an example see Efficiently download multiple files using gevent.
+For an example see :doc:`Efficiently download multiple files using gevent </storage/examples>`.
 
 Using Libcloud with Twisted
 ---------------------------
@@ -60,7 +60,7 @@ calls inside a thread. In Twisted this can be achieved using
 ``threads.deferToThread`` which runs a provided method inside the Twisted
 thread pool.
 
-The example bellow demonstrates how to create a new node inside a thread
+The example below demonstrates how to create a new node inside a thread
 without blocking the whole reactor.
 
 .. literalinclude:: /examples/misc/twisted_create_node.py

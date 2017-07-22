@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pylint: disable=unexpected-keyword-arg
+
 __all__ = [
     'SoftLayerDNSDriver'
 ]
@@ -208,6 +210,7 @@ class SoftLayerDNSDriver(DNSDriver):
             data=item['data'],
             zone=zone,
             driver=self,
+            ttl=item['ttl'],
             extra=extra
         )
         return record

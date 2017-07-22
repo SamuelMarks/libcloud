@@ -18,17 +18,25 @@ libcloud provides a unified interface to the cloud computing resources.
 
 :var __version__: Current version of libcloud
 """
-
-__all__ = ['__version__', 'enable_debug']
-__version__ = '0.17.1-dev'
-
 import os
+import codecs
+
+from libcloud.base import DriverType  # NOQA
+from libcloud.base import DriverTypeFactoryMap  # NOQA
+from libcloud.base import get_driver  # NOQA
+
 
 try:
     import paramiko
     have_paramiko = True
 except ImportError:
     have_paramiko = False
+
+__all__ = [
+    '__version__',
+    'enable_debug'
+]
+__version__ = '2.0.0'
 
 
 def enable_debug(fo):
@@ -38,13 +46,11 @@ def enable_debug(fo):
     :param fo: Where to append debugging information
     :type fo: File like object, only write operations are used.
     """
-    from libcloud.common.base import (Connection,
-                                      LoggingHTTPConnection,
-                                      LoggingHTTPSConnection)
-    LoggingHTTPSConnection.log = fo
-    LoggingHTTPConnection.log = fo
-    Connection.conn_classes = (LoggingHTTPConnection,
-                               LoggingHTTPSConnection)
+    from libcloud.common.base import Connection
+    from libcloud.utils.loggingconnection import LoggingConnection
+
+    LoggingConnection.log = fo
+    Connection.conn_class = LoggingConnection
 
 
 def _init_once():
@@ -56,7 +62,18 @@ def _init_once():
     """
     path = os.getenv('LIBCLOUD_DEBUG')
     if path:
-        fo = open(path, 'a')
+        mode = 'a'
+
+        # Special case for /dev/stderr and /dev/stdout on Python 3.
+        from libcloud.utils.py3 import PY3
+
+        # Opening those files in append mode will throw "illegal seek"
+        # exception there.
+        # Late import to avoid setup.py related side affects
+        if path in ['/dev/stderr', '/dev/stdout'] and PY3:
+            mode = 'w'
+
+        fo = codecs.open(path, mode, encoding='utf8')
         enable_debug(fo)
 
         if have_paramiko:

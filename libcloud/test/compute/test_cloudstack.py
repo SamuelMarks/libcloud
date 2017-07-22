@@ -25,6 +25,7 @@ try:
 except ImportError:
     import json
 
+from libcloud.compute.base import NodeLocation
 from libcloud.common.types import ProviderError
 from libcloud.compute.drivers.cloudstack import CloudStackNodeDriver, \
     CloudStackAffinityGroupType
@@ -34,7 +35,7 @@ from libcloud.compute.types import NodeState
 from libcloud.compute.providers import get_driver
 
 from libcloud.test import unittest
-from libcloud.test import MockHttpTestCase
+from libcloud.test import MockHttp
 from libcloud.test.compute import TestCaseMixin
 from libcloud.test.file_fixtures import ComputeFileFixtures
 
@@ -43,8 +44,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
     driver_klass = CloudStackNodeDriver
 
     def setUp(self):
-        self.driver_klass.connectionCls.conn_classes = \
-            (None, CloudStackMockHttp)
+        self.driver_klass.connectionCls.conn_class = CloudStackMockHttp
         self.driver = self.driver_klass('apikey', 'secret',
                                         path='/test/path',
                                         host='api.dummy.com')
@@ -220,6 +220,19 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(node.name, 'test')
         self.assertEqual(node.extra['key_name'], 'foobar')
 
+    def test_create_node_ex_userdata(self):
+        self.driver.path = '/test/path/userdata'
+        size = self.driver.list_sizes()[0]
+        image = self.driver.list_images()[0]
+        location = self.driver.list_locations()[0]
+        CloudStackMockHttp.fixture_tag = 'deploykeyname'
+        node = self.driver.create_node(name='test',
+                                       location=location,
+                                       image=image,
+                                       size=size,
+                                       ex_userdata='foobar')
+        self.assertEqual(node.name, 'test')
+
     def test_create_node_project(self):
         size = self.driver.list_sizes()[0]
         image = self.driver.list_images()[0]
@@ -241,7 +254,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(0, len(images))
 
     def test_list_images(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listTemplates_default.json')
         templates = fixture['listtemplatesresponse']['template']
 
@@ -265,7 +278,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(10, diskOffering.size)
 
     def test_ex_list_networks(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listNetworks_default.json')
         fixture_networks = fixture['listnetworksresponse']['network']
 
@@ -282,7 +295,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
             self.assertEqual(network.zoneid, fixture_networks[i]['zoneid'])
 
     def test_ex_list_network_offerings(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listNetworkOfferings_default.json')
         fixture_networkoffers = \
             fixture['listnetworkofferingsresponse']['networkoffering']
@@ -303,7 +316,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
                              fixture_networkoffers[i]['serviceofferingid'])
 
     def test_ex_create_network(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'createNetwork_default.json')
 
         fixture_network = fixture['createnetworkresponse']['network']
@@ -339,7 +352,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertTrue(result)
 
     def test_ex_list_nics(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listNics_default.json')
 
         fixture_nic = fixture['listnicsresponse']['nic']
@@ -379,7 +392,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertTrue(result)
 
     def test_ex_list_vpc_offerings(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listVPCOfferings_default.json')
         fixture_vpcoffers = \
             fixture['listvpcofferingsresponse']['vpcoffering']
@@ -394,7 +407,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
                              fixture_vpcoffers[i]['displaytext'])
 
     def test_ex_list_vpcs(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listVPCs_default.json')
         fixture_vpcs = fixture['listvpcsresponse']['vpc']
 
@@ -409,7 +422,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
             self.assertEqual(vpc.zone_id, fixture_vpcs[i]['zoneid'])
 
     def test_ex_list_routers(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listRouters_default.json')
         fixture_routers = fixture['listroutersresponse']['router']
 
@@ -423,7 +436,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
             self.assertEqual(router.vpc_id, fixture_routers[i]['vpcid'])
 
     def test_ex_create_vpc(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'createVPC_default.json')
 
         fixture_vpc = fixture['createvpcresponse']
@@ -445,7 +458,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertTrue(result)
 
     def test_ex_create_network_acllist(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'createNetworkACLList_default.json')
 
         fixture_network_acllist = fixture['createnetworkacllistresponse']
@@ -459,7 +472,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(network_acllist.id, fixture_network_acllist['id'])
 
     def test_ex_list_network_acllist(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listNetworkACLLists_default.json')
         fixture_acllist = \
             fixture['listnetworkacllistsresponse']['networkacllist']
@@ -475,7 +488,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
                              fixture_acllist[i]['description'])
 
     def test_ex_create_network_acl(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'createNetworkACL_default.json')
 
         fixture_network_acllist = fixture['createnetworkaclresponse']
@@ -492,7 +505,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(network_acl.id, fixture_network_acllist['id'])
 
     def test_ex_list_projects(self):
-        _, fixture = CloudStackMockHttp()._load_fixture(
+        _, fixture = self.driver.connection.connection._load_fixture(
             'listProjects_default.json')
         fixture_projects = fixture['listprojectsresponse']['project']
 
@@ -509,6 +522,8 @@ class CloudStackCommonTestCase(TestCaseMixin):
             self.assertEqual(
                 project.extra['cpulimit'],
                 fixture_projects[i]['cpulimit'])
+            # Note -1 represents unlimited
+            self.assertEqual(project.extra['networklimit'], -1)
 
     def test_create_volume(self):
         volumeName = 'vol-0'
@@ -541,6 +556,30 @@ class CloudStackCommonTestCase(TestCaseMixin):
 
         self.assertEqual(volumeName, volume.name)
 
+    def test_create_volume_no_matching_volume_type(self):
+        """If the ex_disk_type does not exit, then an exception should be
+        thrown."""
+
+        location = self.driver.list_locations()[0]
+
+        self.assertRaises(
+            LibcloudError,
+            self.driver.create_volume,
+            'vol-0', location, 11, ex_volume_type='FooVolumeType')
+
+    def test_create_volume_with_defined_volume_type(self):
+        CloudStackMockHttp.fixture_tag = 'withvolumetype'
+
+        volumeName = 'vol-0'
+        volLocation = self.driver.list_locations()[0]
+        diskOffering = self.driver.ex_list_disk_offerings()[0]
+        volumeType = diskOffering.name
+
+        volume = self.driver.create_volume(10, volumeName, location=volLocation,
+                                           ex_volume_type=volumeType)
+
+        self.assertEqual(volumeName, volume.name)
+
     def test_attach_volume(self):
         node = self.driver.list_nodes()[0]
         volumeName = 'vol-0'
@@ -570,13 +609,59 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertEqual(1, len(volumes))
         self.assertEqual('ROOT-69942', volumes[0].name)
 
+    def test_ex_get_volume(self):
+        volume = self.driver.ex_get_volume(2600)
+        self.assertEqual('ROOT-69942', volume.name)
+
     def test_list_nodes(self):
         nodes = self.driver.list_nodes()
         self.assertEqual(2, len(nodes))
         self.assertEqual('test', nodes[0].name)
         self.assertEqual('2600', nodes[0].id)
+        self.assertEqual(0, len(nodes[0].private_ips))
         self.assertEqual([], nodes[0].extra['security_group'])
         self.assertEqual(None, nodes[0].extra['key_name'])
+        self.assertEqual(1, len(nodes[0].public_ips))
+        self.assertEqual('1.1.1.116', nodes[0].public_ips[0])
+        self.assertEqual(1, len(nodes[0].extra['ip_addresses']))
+        self.assertEqual(34000, nodes[0].extra['ip_addresses'][0].id)
+        self.assertEqual(1, len(nodes[0].extra['ip_forwarding_rules']))
+        self.assertEqual('772fd410-6649-43ed-befa-77be986b8906',
+                         nodes[0].extra['ip_forwarding_rules'][0].id)
+        self.assertEqual(1, len(nodes[0].extra['port_forwarding_rules']))
+        self.assertEqual('bc7ea3ee-a2c3-4b86-a53f-01bdaa1b2e32',
+                         nodes[0].extra['port_forwarding_rules'][0].id)
+        self.assertEqual({"testkey": "testvalue", "foo": "bar"},
+                         nodes[0].extra['tags'])
+
+    def test_list_nodes_location_filter(self):
+        def list_nodes_mock(self, **kwargs):
+            self.assertTrue('zoneid' in kwargs)
+            self.assertEqual('1', kwargs.get('zoneid'))
+
+            body, obj = self._load_fixture('listVirtualMachines_default.json')
+            return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
+        CloudStackMockHttp._cmd_listVirtualMachines = list_nodes_mock
+        try:
+            location = NodeLocation(1, 'Sydney', 'Unknown', self.driver)
+            self.driver.list_nodes(location=location)
+        finally:
+            del CloudStackMockHttp._cmd_listVirtualMachines
+
+    def test_ex_get_node(self):
+        node = self.driver.ex_get_node(2600)
+        self.assertEqual('test', node.name)
+        self.assertEqual('2600', node.id)
+        self.assertEqual([], node.extra['security_group'])
+        self.assertEqual(None, node.extra['key_name'])
+        self.assertEqual(1, len(node.public_ips))
+        self.assertEqual('1.1.1.116', node.public_ips[0])
+        self.assertEqual(1, len(node.extra['ip_addresses']))
+        self.assertEqual(34000, node.extra['ip_addresses'][0].id)
+
+    def test_ex_get_node_doesnt_exist(self):
+        self.assertRaises(Exception, self.driver.ex_get_node(26), node_id=26)
 
     def test_list_locations(self):
         location = self.driver.list_locations()[0]
@@ -724,12 +809,20 @@ class CloudStackCommonTestCase(TestCaseMixin):
         self.assertTrue(res)
 
     def test_ex_authorize_security_group_ingress(self):
-        res = self.driver.ex_authorize_security_group_ingress('MySG',
-                                                              'TCP',
-                                                              '22',
-                                                              '22',
-                                                              '0.0.0.0/0')
-        self.assertTrue(res)
+        res = self.driver.ex_authorize_security_group_ingress('test_sg',
+                                                              'udp',
+                                                              '0.0.0.0/0',
+                                                              '0',
+                                                              '65535')
+        self.assertEqual(res.get('name'), 'test_sg')
+        self.assertTrue('ingressrule' in res)
+        rules = res['ingressrule']
+        self.assertEqual(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule['cidr'], '0.0.0.0/0')
+        self.assertEqual(rule['endport'], 65535)
+        self.assertEqual(rule['protocol'], 'udp')
+        self.assertEqual(rule['startport'], 0)
 
     def test_ex_create_affinity_group(self):
         res = self.driver.ex_create_affinity_group('MyAG2',
@@ -774,6 +867,7 @@ class CloudStackCommonTestCase(TestCaseMixin):
     def test_ex_list_public_ips(self):
         ips = self.driver.ex_list_public_ips()
         self.assertEqual(ips[0].address, '1.1.1.116')
+        self.assertEqual(ips[0].virtualmachine_id, '2600')
 
     def test_ex_allocate_public_ip(self):
         addr = self.driver.ex_allocate_public_ip()
@@ -1172,7 +1266,7 @@ class CloudStackTestCase(CloudStackCommonTestCase, unittest.TestCase):
             self.fail('url provided but driver raised an exception')
 
 
-class CloudStackMockHttp(MockHttpTestCase):
+class CloudStackMockHttp(MockHttp, unittest.TestCase):
     fixtures = ComputeFileFixtures('cloudstack')
     fixture_tag = 'default'
 
@@ -1211,12 +1305,17 @@ class CloudStackMockHttp(MockHttpTestCase):
         else:
             fixture = command + '_' + self.fixture_tag + '.json'
             body, obj = self._load_fixture(fixture)
-            return (httplib.OK, body, obj, httplib.responses[httplib.OK])
+            return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
+    def _test_path_userdata(self, method, url, body, headers):
+        if 'deployVirtualMachine' in url:
+            self.assertUrlContainsQueryParams(url, {'userdata': 'Zm9vYmFy'})
+        return self._test_path(method, url, body, headers)
 
     def _cmd_queryAsyncJobResult(self, jobid):
         fixture = 'queryAsyncJobResult' + '_' + str(jobid) + '.json'
         body, obj = self._load_fixture(fixture)
-        return (httplib.OK, body, obj, httplib.responses[httplib.OK])
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
 
 if __name__ == '__main__':
     sys.exit(unittest.main())

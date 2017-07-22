@@ -18,13 +18,20 @@
 # clause BSD license
 # https://bitbucket.org/loewis/django-3k
 
+# pylint: disable=import-error
+
 from __future__ import absolute_import
 
 import sys
 import types
 
+DEFAULT_LXML = False
+
 try:
-    from lxml import etree as ET
+    if DEFAULT_LXML:
+        from lxml import etree as ET
+    else:
+        from xml.etree import ElementTree as ET
 except ImportError:
     from xml.etree import ElementTree as ET
 
@@ -60,7 +67,11 @@ if sys.version_info >= (3, 2) and sys.version_info < (3, 3):
     PY32 = True
 
 if PY2_pre_279 or PY3_pre_32:
-    from backports.ssl_match_hostname import match_hostname, CertificateError  # NOQA
+    try:
+        from backports.ssl_match_hostname import match_hostname, CertificateError  # NOQA
+    except ImportError:
+        import warnings
+        warnings.warn("Missing backports.ssl_match_hostname package")
 else:
     # ssl module in Python >= 3.2 includes match hostname function
     from ssl import match_hostname, CertificateError  # NOQA
@@ -113,6 +124,8 @@ if PY3:
     def byte(n):
         # assume n is a Latin-1 string of length 1
         return ord(n)
+
+    _real_unicode = str
     u = str
 
     def bchr(s):
@@ -172,8 +185,15 @@ else:
         """Take an integer and make a 1-character byte string."""
         return chr(s)
 
-    def next(i):
-        return i.next()
+    _default_value_next = object()
+
+    def next(iterator, default=_default_value_next):
+        try:
+            return iterator.next()
+        except StopIteration:
+            if default is _default_value_next:
+                raise
+            return default
 
     def dictvalues(d):
         return d.values()

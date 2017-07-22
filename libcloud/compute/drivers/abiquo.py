@@ -18,10 +18,10 @@ Abiquo Compute Driver
 The driver implements the compute Abiquo functionality for the Abiquo API.
 This version is compatible with the following versions of Abiquo:
 
-    * Abiquo 3.1 (http://wiki.abiquo.com/display/ABI31/The+Abiquo+API)
+    * Abiquo 3.4 (http://wiki.abiquo.com/display/ABI34/The+Abiquo+API)
 """
-import xml.etree.ElementTree as ET
 
+from libcloud.utils.py3 import ET
 from libcloud.compute.base import NodeDriver, NodeSize
 from libcloud.compute.types import Provider, LibcloudError
 from libcloud.common.abiquo import (AbiquoConnection, get_href,
@@ -328,8 +328,8 @@ class AbiquoNodeDriver(NodeDriver):
         """
         Destroy a group.
 
-        Be careful! Destroying a group means destroying all the :class:`Node`s
-        there and the group itself!
+        Be careful! Destroying a group means destroying all the :class:`Node`
+        instances there and the group itself!
 
         If there is currently any action over any :class:`Node` of the
         :class:`NodeGroup`, then the method will raise an exception.
@@ -746,8 +746,6 @@ class AbiquoNodeDriver(NodeDriver):
             # Override the 'NodeSize' data
             ram = ET.SubElement(vm, 'ram')
             ram.text = str(kwargs['size'].ram)
-            hd = ET.SubElement(vm, 'hdInBytes')
-            hd.text = str(int(kwargs['size'].disk) * self.GIGABYTE)
 
         # Create the virtual machine
         nodes_link = group.uri + '/virtualmachines'

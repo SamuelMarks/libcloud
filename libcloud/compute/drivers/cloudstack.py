@@ -15,6 +15,7 @@
 
 from __future__ import with_statement
 
+import sys
 import base64
 import warnings
 
@@ -27,8 +28,21 @@ from libcloud.compute.base import Node, NodeDriver, NodeImage, NodeLocation
 from libcloud.compute.base import NodeSize, StorageVolume, VolumeSnapshot
 from libcloud.compute.base import KeyPair
 from libcloud.compute.types import NodeState, LibcloudError
-from libcloud.compute.types import KeyPairDoesNotExistError
+from libcloud.compute.types import KeyPairDoesNotExistError, StorageVolumeState
 from libcloud.utils.networking import is_private_subnet
+
+
+# Utility functions
+def transform_int_or_unlimited(value):
+    try:
+        return int(value)
+    except ValueError:
+        e = sys.exc_info()[1]
+
+        if str(value).lower() == 'unlimited':
+            return -1
+
+        raise e
 
 
 """
@@ -194,7 +208,7 @@ RESOURCE_EXTRA_ATTRIBUTES_MAP = {
         },
         'device_id': {
             'key_name': 'deviceid',
-            'transform_func': int
+            'transform_func': transform_int_or_unlimited
         },
         'instance_id': {
             'key_name': 'virtualmachineid',
@@ -232,7 +246,7 @@ RESOURCE_EXTRA_ATTRIBUTES_MAP = {
         },
         'domain_id': {
             'key_name': 'domainid',
-            'transform_func': int
+            'transform_func': transform_int_or_unlimited
         },
         'network_domain': {
             'key_name': 'networkdomain',
@@ -257,55 +271,82 @@ RESOURCE_EXTRA_ATTRIBUTES_MAP = {
     },
     'project': {
         'account': {'key_name': 'account', 'transform_func': str},
-        'cpuavailable': {'key_name': 'cpuavailable', 'transform_func': int},
-        'cpulimit': {'key_name': 'cpulimit', 'transform_func': int},
-        'cputotal': {'key_name': 'cputotal', 'transform_func': int},
+        'cpuavailable': {'key_name': 'cpuavailable',
+                         'transform_func': transform_int_or_unlimited},
+        'cpulimit': {'key_name': 'cpulimit',
+                     'transform_func': transform_int_or_unlimited},
+        'cputotal': {'key_name': 'cputotal',
+                     'transform_func': transform_int_or_unlimited},
         'domain': {'key_name': 'domain', 'transform_func': str},
         'domainid': {'key_name': 'domainid', 'transform_func': str},
-        'ipavailable': {'key_name': 'ipavailable', 'transform_func': int},
-        'iplimit': {'key_name': 'iplimit', 'transform_func': int},
-        'iptotal': {'key_name': 'iptotal', 'transform_func': int},
+        'ipavailable': {'key_name': 'ipavailable',
+                        'transform_func': transform_int_or_unlimited},
+        'iplimit': {'key_name': 'iplimit',
+                    'transform_func': transform_int_or_unlimited},
+        'iptotal': {'key_name': 'iptotal',
+                    'transform_func': transform_int_or_unlimited},
         'memoryavailable': {'key_name': 'memoryavailable',
-                            'transform_func': int},
-        'memorylimit': {'key_name': 'memorylimit', 'transform_func': int},
-        'memorytotal': {'key_name': 'memorytotal', 'transform_func': int},
+                            'transform_func': transform_int_or_unlimited},
+        'memorylimit': {'key_name': 'memorylimit',
+                        'transform_func': transform_int_or_unlimited},
+        'memorytotal': {'key_name': 'memorytotal',
+                        'transform_func': transform_int_or_unlimited},
         'networkavailable': {'key_name': 'networkavailable',
-                             'transform_func': int},
-        'networklimit': {'key_name': 'networklimit', 'transform_func': int},
-        'networktotal': {'key_name': 'networktotal', 'transform_func': int},
-        'primarystorageavailable': {'key_name': 'primarystorageavailable',
-                                    'transform_func': int},
+                             'transform_func': transform_int_or_unlimited},
+        'networklimit': {'key_name': 'networklimit',
+                         'transform_func': transform_int_or_unlimited},
+        'networktotal': {'key_name': 'networktotal',
+                         'transform_func': transform_int_or_unlimited},
+        'primarystorageavailable': {
+            'key_name': 'primarystorageavailable',
+            'transform_func': transform_int_or_unlimited},
         'primarystoragelimit': {'key_name': 'primarystoragelimit',
-                                'transform_func': int},
+                                'transform_func': transform_int_or_unlimited},
         'primarystoragetotal': {'key_name': 'primarystoragetotal',
-                                'transform_func': int},
-        'secondarystorageavailable': {'key_name': 'secondarystorageavailable',
-                                      'transform_func': int},
-        'secondarystoragelimit': {'key_name': 'secondarystoragelimit',
-                                  'transform_func': int},
-        'secondarystoragetotal': {'key_name': 'secondarystoragetotal',
-                                  'transform_func': int},
+                                'transform_func': transform_int_or_unlimited},
+        'secondarystorageavailable': {
+            'key_name': 'secondarystorageavailable',
+            'transform_func': transform_int_or_unlimited},
+        'secondarystoragelimit': {
+            'key_name': 'secondarystoragelimit',
+            'transform_func': transform_int_or_unlimited},
+        'secondarystoragetotal': {
+            'key_name': 'secondarystoragetotal',
+            'transform_func': transform_int_or_unlimited},
         'snapshotavailable': {'key_name': 'snapshotavailable',
-                              'transform_func': int},
-        'snapshotlimit': {'key_name': 'snapshotlimit', 'transform_func': int},
-        'snapshottotal': {'key_name': 'snapshottotal', 'transform_func': int},
+                              'transform_func': transform_int_or_unlimited},
+        'snapshotlimit': {'key_name': 'snapshotlimit',
+                          'transform_func': transform_int_or_unlimited},
+        'snapshottotal': {'key_name': 'snapshottotal',
+                          'transform_func': transform_int_or_unlimited},
         'state': {'key_name': 'state', 'transform_func': str},
         'tags': {'key_name': 'tags', 'transform_func': str},
         'templateavailable': {'key_name': 'templateavailable',
-                              'transform_func': int},
-        'templatelimit': {'key_name': 'templatelimit', 'transform_func': int},
-        'templatetotal': {'key_name': 'templatetotal', 'transform_func': int},
-        'vmavailable': {'key_name': 'vmavailable', 'transform_func': int},
-        'vmlimit': {'key_name': 'vmlimit', 'transform_func': int},
-        'vmrunning': {'key_name': 'vmrunning', 'transform_func': int},
-        'vmtotal': {'key_name': 'vmtotal', 'transform_func': int},
+                              'transform_func': transform_int_or_unlimited},
+        'templatelimit': {'key_name': 'templatelimit',
+                          'transform_func': transform_int_or_unlimited},
+        'templatetotal': {'key_name': 'templatetotal',
+                          'transform_func': transform_int_or_unlimited},
+        'vmavailable': {'key_name': 'vmavailable',
+                        'transform_func': transform_int_or_unlimited},
+        'vmlimit': {'key_name': 'vmlimit',
+                    'transform_func': transform_int_or_unlimited},
+        'vmrunning': {'key_name': 'vmrunning',
+                      'transform_func': transform_int_or_unlimited},
+        'vmtotal': {'key_name': 'vmtotal',
+                    'transform_func': transform_int_or_unlimited},
         'volumeavailable': {'key_name': 'volumeavailable',
-                            'transform_func': int},
-        'volumelimit': {'key_name': 'volumelimit', 'transform_func': int},
-        'volumetotal': {'key_name': 'volumetotal', 'transform_func': int},
-        'vpcavailable': {'key_name': 'vpcavailable', 'transform_func': int},
-        'vpclimit': {'key_name': 'vpclimit', 'transform_func': int},
-        'vpctotal': {'key_name': 'vpctotal', 'transform_func': int}
+                            'transform_func': transform_int_or_unlimited},
+        'volumelimit': {'key_name': 'volumelimit',
+                        'transform_func': transform_int_or_unlimited},
+        'volumetotal': {'key_name': 'volumetotal',
+                        'transform_func': transform_int_or_unlimited},
+        'vpcavailable': {'key_name': 'vpcavailable',
+                         'transform_func': transform_int_or_unlimited},
+        'vpclimit': {'key_name': 'vpclimit',
+                     'transform_func': transform_int_or_unlimited},
+        'vpctotal': {'key_name': 'vpctotal',
+                     'transform_func': transform_int_or_unlimited}
     },
     'nic': {
         'secondary_ip': {
@@ -350,11 +391,11 @@ RESOURCE_EXTRA_ATTRIBUTES_MAP = {
         },
         'esp_lifetime': {
             'key_name': 'esplifetime',
-            'transform_func': int
+            'transform_func': transform_int_or_unlimited
         },
         'ike_lifetime': {
             'key_name': 'ikelifetime',
-            'transform_func': int
+            'transform_func': transform_int_or_unlimited
         },
         'name': {
             'key_name': 'name',
@@ -474,15 +515,20 @@ class CloudStackAddress(object):
 
     :param      vpc_id: VPC the ip belongs to
     :type       vpc_id: ``str``
+
+    :param      virtualmachine_id: The ID of virutal machine this address
+                                   is assigned to
+    :type       virtualmachine_id: ``str``
     """
 
     def __init__(self, id, address, driver, associated_network_id=None,
-                 vpc_id=None):
+                 vpc_id=None, virtualmachine_id=None):
         self.id = id
         self.address = address
         self.driver = driver
         self.associated_network_id = associated_network_id
         self.vpc_id = vpc_id
+        self.virtualmachine_id = virtualmachine_id
 
     def release(self):
         self.driver.ex_release_public_ip(address=self)
@@ -772,7 +818,7 @@ class CloudStackNetworkACL(object):
         :type       id ``int``
 
         :param      protocol: the protocol for the ACL rule. Valid values are
-                    TCP/UDP/ICMP/ALL or valid protocol number
+                               TCP/UDP/ICMP/ALL or valid protocol number
         :type       protocol: ``string``
 
         :param      acl_id: Name of the network ACL List
@@ -791,7 +837,8 @@ class CloudStackNetworkACL(object):
         :type       end_port: ``str``
 
         :param      traffic_type: the traffic type for the ACL,can be Ingress
-                    or Egress, defaulted to Ingress if not specified
+                                  or Egress, defaulted to Ingress if not
+                                  specified
         :type       traffic_type: ``str``
 
         :rtype: :class:`CloudStackNetworkACL`
@@ -964,11 +1011,11 @@ class CloudStackVpnGateway(object):
 
     @property
     def vpc(self):
-        for vpc in self.ex_list_vpcs():
+        for vpc in self.driver.ex_list_vpcs():
             if self.vpc_id == vpc.id:
-                break
-        else:
-            raise LibcloudError('VPC with id=%s not found' % self.vpc_id)
+                return vpc
+
+        raise LibcloudError('VPC with id=%s not found' % self.vpc_id)
 
     def delete(self):
         return self.driver.ex_delete_vpn_gateway(vpn_gateway=self)
@@ -1188,11 +1235,25 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
     NODE_STATE_MAP = {
         'Running': NodeState.RUNNING,
         'Starting': NodeState.REBOOTING,
+        'Migrating': NodeState.MIGRATING,
         'Stopped': NodeState.STOPPED,
         'Stopping': NodeState.PENDING,
         'Destroyed': NodeState.TERMINATED,
         'Expunging': NodeState.PENDING,
         'Error': NodeState.TERMINATED
+    }
+
+    VOLUME_STATE_MAP = {
+        'Creating': StorageVolumeState.CREATING,
+        'Destroying': StorageVolumeState.DELETING,
+        'Expunging': StorageVolumeState.DELETING,
+        'Destroy': StorageVolumeState.DELETED,
+        'Expunged': StorageVolumeState.DELETED,
+        'Allocated': StorageVolumeState.AVAILABLE,
+        'Ready': StorageVolumeState.AVAILABLE,
+        'Snapshotting': StorageVolumeState.BACKUP,
+        'UploadError': StorageVolumeState.ERROR,
+        'Migrating': StorageVolumeState.MIGRATING
     }
 
     def __init__(self, key, secret=None, secure=True, host=None,
@@ -1289,7 +1350,7 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
         return locations
 
-    def list_nodes(self, project=None):
+    def list_nodes(self, project=None, location=None):
         """
         @inherits: :class:`NodeDriver.list_nodes`
 
@@ -1297,14 +1358,25 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                              the defined project.
         :type       project: :class:`.CloudStackProject`
 
+        :keyword    location: Limit nodes returned to those in the defined
+                              location.
+        :type       location: :class:`.NodeLocation`
+
         :rtype: ``list`` of :class:`CloudStackNode`
         """
 
         args = {}
+
         if project:
             args['projectid'] = project.id
+
+        if location is not None:
+            args['zoneid'] = location.id
+
         vms = self._sync_request('listVirtualMachines', params=args)
         addrs = self._sync_request('listPublicIpAddresses', params=args)
+        port_forwarding_rules = self._sync_request('listPortForwardingRules')
+        ip_forwarding_rules = self._sync_request('listIpForwardingRules')
 
         public_ips_map = {}
         for addr in addrs.get('publicipaddress', []):
@@ -1322,14 +1394,15 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             public_ips = list(public_ips)
             node = self._to_node(data=vm, public_ips=public_ips)
 
-            addresses = public_ips_map.get(vm['id'], {}).items()
-            addresses = [CloudStackAddress(node, v, k) for k, v in addresses]
+            addresses = public_ips_map.get(str(vm['id']), {}).items()
+            addresses = [CloudStackAddress(id=address_id, address=address,
+                                           driver=node.driver) for
+                         address, address_id in addresses]
             node.extra['ip_addresses'] = addresses
 
             rules = []
             for addr in addresses:
-                result = self._sync_request('listIpForwardingRules')
-                for r in result.get('ipforwardingrule', []):
+                for r in ip_forwarding_rules.get('ipforwardingrule', []):
                     if str(r['virtualmachineid']) == node.id:
                         rule = CloudStackIPForwardingRule(node, r['id'],
                                                           addr,
@@ -1341,12 +1414,13 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             node.extra['ip_forwarding_rules'] = rules
 
             rules = []
-            public_ips = self.ex_list_public_ips()
-            result = self._sync_request('listPortForwardingRules')
-            for r in result.get('portforwardingrule', []):
+            for r in port_forwarding_rules.get('portforwardingrule', []):
                 if str(r['virtualmachineid']) == node.id:
-                    addr = [a for a in public_ips if
-                            a.address == r['ipaddress']]
+                    addr = [CloudStackAddress(id=a['id'],
+                                              address=a['ipaddress'],
+                                              driver=node.driver)
+                            for a in addrs.get('publicipaddress', [])
+                            if a['ipaddress'] == r['ipaddress']]
                     rule = CloudStackPortForwardingRule(node, r['id'],
                                                         addr[0],
                                                         r['protocol'].upper(),
@@ -1362,6 +1436,81 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             nodes.append(node)
 
         return nodes
+
+    def ex_get_node(self, node_id, project=None):
+        """
+        Return a Node object based on its ID.
+
+        :param  node_id: The id of the node
+        :type   node_id: ``str``
+
+        :keyword    project: Limit node returned to those configured under
+                             the defined project.
+        :type       project: :class:`.CloudStackProject`
+
+        :rtype: :class:`CloudStackNode`
+        """
+        list_nodes_args = {'id': node_id}
+        list_ips_args = {}
+        if project:
+            list_nodes_args['projectid'] = project.id
+            list_ips_args['projectid'] = project.id
+        vms = self._sync_request('listVirtualMachines', params=list_nodes_args)
+        if not vms:
+            raise Exception("Node '%s' not found" % node_id)
+        vm = vms['virtualmachine'][0]
+        addrs = self._sync_request('listPublicIpAddresses',
+                                   params=list_ips_args)
+
+        public_ips = {}
+        for addr in addrs.get('publicipaddress', []):
+            if 'virtualmachineid' not in addr:
+                continue
+            public_ips[addr['ipaddress']] = addr['id']
+
+        node = self._to_node(data=vm, public_ips=list(public_ips.keys()))
+
+        addresses = [CloudStackAddress(id=address_id, address=address,
+                                       driver=node.driver) for
+                     address, address_id in public_ips.items()]
+        node.extra['ip_addresses'] = addresses
+
+        rules = []
+        list_fw_rules = {'virtualmachineid': node_id}
+        for addr in addresses:
+            result = self._sync_request('listIpForwardingRules',
+                                        params=list_fw_rules)
+            for r in result.get('ipforwardingrule', []):
+                if str(r['virtualmachineid']) == node.id:
+                    rule = CloudStackIPForwardingRule(node, r['id'],
+                                                      addr,
+                                                      r['protocol']
+                                                      .upper(),
+                                                      r['startport'],
+                                                      r['endport'])
+                    rules.append(rule)
+        node.extra['ip_forwarding_rules'] = rules
+
+        rules = []
+        public_ips = self.ex_list_public_ips()
+        result = self._sync_request('listPortForwardingRules',
+                                    params=list_fw_rules)
+        for r in result.get('portforwardingrule', []):
+            if str(r['virtualmachineid']) == node.id:
+                addr = [a for a in public_ips if
+                        a.address == r['ipaddress']]
+                rule = CloudStackPortForwardingRule(node, r['id'],
+                                                    addr[0],
+                                                    r['protocol'].upper(),
+                                                    r['publicport'],
+                                                    r['privateport'],
+                                                    r['publicendport'],
+                                                    r['privateendport'])
+                if not addr[0].address in node.public_ips:
+                    node.public_ips.append(addr[0].address)
+                rules.append(rule)
+        node.extra['port_forwarding_rules'] = rules
+        return node
 
     def list_sizes(self, location=None):
         """
@@ -1486,7 +1635,7 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             server_params['keypair'] = ex_key_name
 
         if ex_user_data:
-            ex_user_data = base64.b64encode(b(ex_user_data).decode('ascii'))
+            ex_user_data = base64.b64encode(b(ex_user_data)).decode('ascii')
             server_params['userdata'] = ex_user_data
 
         if ex_security_groups:
@@ -1793,14 +1942,23 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
         return vpcofferings
 
-    def ex_list_vpcs(self):
+    def ex_list_vpcs(self, project=None):
         """
         List the available VPCs
+
+        :keyword    project: Optional project under which VPCs are present.
+        :type       project: :class:`.CloudStackProject`
 
         :rtype ``list`` of :class:`CloudStackVPC`
         """
 
+        args = {}
+
+        if project is not None:
+            args['projectid'] = project.id
+
         res = self._sync_request(command='listVPCs',
+                                 params=args,
                                  method='GET')
         vpcs = res.get('vpc', [])
 
@@ -1955,17 +2113,28 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
         return projects
 
-    def create_volume(self, size, name, location=None, snapshot=None):
+    def create_volume(self, size, name, location=None, snapshot=None,
+                      ex_volume_type=None):
         """
         Creates a data volume
         Defaults to the first location
         """
-        for diskOffering in self.ex_list_disk_offerings():
-            if diskOffering.size == size or diskOffering.customizable:
-                break
+        if ex_volume_type is None:
+            for diskOffering in self.ex_list_disk_offerings():
+                if diskOffering.size == size or diskOffering.customizable:
+                    break
+            else:
+                raise LibcloudError(
+                    'Disk offering with size=%s not found' % size)
         else:
-            raise LibcloudError(
-                'Disk offering with size=%s not found' % size)
+            for diskOffering in self.ex_list_disk_offerings():
+                if diskOffering.name == ex_volume_type:
+                    if not diskOffering.customizable:
+                        size = diskOffering.size
+                    break
+            else:
+                raise LibcloudError(
+                    'Volume type with name=%s not found' % ex_volume_type)
 
         if location is None:
             location = self.list_locations()[0]
@@ -1983,9 +2152,12 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
         volumeResponse = requestResult['volume']
 
+        state = self._to_volume_state(volumeResponse)
+
         return StorageVolume(id=volumeResponse['id'],
                              name=name,
                              size=size,
+                             state=state,
                              driver=self,
                              extra=dict(name=volumeResponse['name']))
 
@@ -2039,19 +2211,56 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                                          method='GET')
 
         list_volumes = []
+
         extra_map = RESOURCE_EXTRA_ATTRIBUTES_MAP['volume']
-        for vol in volumes['volume']:
+        for vol in volumes.get('volume', []):
             extra = self._get_extra_dict(vol, extra_map)
 
             if 'tags' in vol:
                 extra['tags'] = self._get_resource_tags(vol['tags'])
 
+            state = self._to_volume_state(vol)
+
             list_volumes.append(StorageVolume(id=vol['id'],
                                               name=vol['name'],
                                               size=vol['size'],
+                                              state=state,
                                               driver=self,
                                               extra=extra))
         return list_volumes
+
+    def ex_get_volume(self, volume_id, project=None):
+        """
+        Return a StorageVolume object based on its ID.
+
+        :param  volume_id: The id of the volume
+        :type   volume_id: ``str``
+
+        :keyword    project: Limit volume returned to those configured under
+                             the defined project.
+        :type       project: :class:`.CloudStackProject`
+
+        :rtype: :class:`CloudStackNode`
+        """
+        args = {'id': volume_id}
+        if project:
+            args['projectid'] = project.id
+        volumes = self._sync_request(command='listVolumes', params=args)
+        if not volumes:
+            raise Exception("Volume '%s' not found" % volume_id)
+        vol = volumes['volume'][0]
+
+        extra_map = RESOURCE_EXTRA_ATTRIBUTES_MAP['volume']
+        extra = self._get_extra_dict(vol, extra_map)
+
+        if 'tags' in vol:
+            extra['tags'] = self._get_resource_tags(vol['tags'])
+
+        state = self._to_volume_state(vol)
+
+        volume = StorageVolume(id=vol['id'], name=vol['name'], state=state,
+                               size=vol['size'], driver=self, extra=extra)
+        return volume
 
     def list_key_pairs(self, **kwargs):
         """
@@ -2109,6 +2318,14 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
         return key_pairs
 
     def get_key_pair(self, name):
+        """
+        Retrieve a single key pair.
+
+        :param name: Name of the key pair to retrieve.
+        :type name: ``str``
+
+        :rtype: :class:`.KeyPair`
+        """
         params = {'name': name}
         res = self._sync_request(command='listSSHKeyPairs',
                                  params=params,
@@ -2226,7 +2443,9 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             ips.append(CloudStackAddress(ip['id'],
                                          ip['ipaddress'],
                                          self,
-                                         ip.get('associatednetworkid', [])))
+                                         ip.get('associatednetworkid', []),
+                                         ip.get('vpcid'),
+                                         ip.get('virtualmachineid')))
 
         return ips
 
@@ -2311,7 +2530,7 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                                 icmp_code=None, icmp_type=None,
                                 start_port=None, end_port=None):
         """
-        Creates a Firewalle Rule
+        Creates a Firewall Rule
 
         :param      address: External IP address
         :type       address: :class:`CloudStackAddress`
@@ -2364,7 +2583,7 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
     def ex_delete_firewall_rule(self, firewall_rule):
         """
-        Remove a Firewall rule.
+        Remove a Firewall Rule.
 
         :param firewall_rule: Firewall rule which should be used
         :type  firewall_rule: :class:`CloudStackFirewallRule`
@@ -2378,7 +2597,7 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
 
     def ex_list_egress_firewall_rules(self):
         """
-        Lists all agress Firewall Rules
+        Lists all egress Firewall Rules
 
         :rtype: ``list`` of :class:`CloudStackEgressFirewallRule`
         """
@@ -2401,9 +2620,9 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                                        icmp_code=None, icmp_type=None,
                                        start_port=None, end_port=None):
         """
-        Creates a Firewalle Rule
+        Creates a Firewall Rule
 
-        :param      network_id: the id network network for the egress firwall
+        :param      network_id: the id network network for the egress firewall
                     services
         :type       network_id: ``str``
 
@@ -2469,14 +2688,103 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                                   method='GET')
         return res['success']
 
-    def ex_list_port_forwarding_rules(self):
+    def ex_list_port_forwarding_rules(self, account=None, domain_id=None,
+                                      id=None, ipaddress_id=None,
+                                      is_recursive=None, keyword=None,
+                                      list_all=None, network_id=None,
+                                      page=None, page_size=None,
+                                      project_id=None):
         """
         Lists all Port Forwarding Rules
 
+        :param     account: List resources by account.
+                            Must be used with the domainId parameter
+        :type      account: ``str``
+
+        :param     domain_id: List only resources belonging to
+                                     the domain specified
+        :type      domain_id: ``str``
+
+        :param     for_display: List resources by display flag (only root
+                                admin is eligible to pass this parameter).
+        :type      for_display: ``bool``
+
+        :param     id: Lists rule with the specified ID
+        :type      id: ``str``
+
+        :param     ipaddress_id: list the rule belonging to
+                                this public ip address
+        :type      ipaddress_id: ``str``
+
+        :param     is_recursive: Defaults to false, but if true,
+                                lists all resources from
+                                the parent specified by the
+                                domainId till leaves.
+        :type      is_recursive: ``bool``
+
+        :param     keyword: List by keyword
+        :type      keyword: ``str``
+
+        :param     list_all: If set to false, list only resources
+                            belonging to the command's caller;
+                            if set to true - list resources that
+                            the caller is authorized to see.
+                            Default value is false
+        :type      list_all: ``bool``
+
+        :param     network_id: list port forwarding rules for certain network
+        :type      network_id: ``string``
+
+        :param     page: The page to list the keypairs from
+        :type      page: ``int``
+
+        :param     page_size: The number of results per page
+        :type      page_size: ``int``
+
+        :param     project_id: list objects by project
+        :type      project_id: ``str``
+
         :rtype: ``list`` of :class:`CloudStackPortForwardingRule`
         """
+
+        args = {}
+
+        if account is not None:
+            args['account'] = account
+
+        if domain_id is not None:
+            args['domainid'] = domain_id
+
+        if id is not None:
+            args['id'] = id
+
+        if ipaddress_id is not None:
+            args['ipaddressid'] = ipaddress_id
+
+        if is_recursive is not None:
+            args['isrecursive'] = is_recursive
+
+        if keyword is not None:
+            args['keyword'] = keyword
+
+        if list_all is not None:
+            args['listall'] = list_all
+
+        if network_id is not None:
+            args['networkid'] = network_id
+
+        if page is not None:
+            args['page'] = page
+
+        if page_size is not None:
+            args['pagesize'] = page_size
+
+        if project_id is not None:
+            args['projectid'] = project_id
+
         rules = []
         result = self._sync_request(command='listPortForwardingRules',
+                                    params=args,
                                     method='GET')
         if result != {}:
             public_ips = self.ex_list_public_ips()
@@ -3230,70 +3538,108 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                                   params={'name': name},
                                   method='GET')['success']
 
-    def ex_authorize_security_group_ingress(self, securitygroupname,
-                                            protocol, cidrlist, startport,
-                                            endport=None):
+    def ex_authorize_security_group_ingress(self, securitygroupname, protocol,
+                                            cidrlist, startport=None,
+                                            endport=None, icmptype=None,
+                                            icmpcode=None, **kwargs):
         """
         Creates a new Security Group Ingress rule
 
-        :param domainid: An optional domainId for the security group.
-                         If the account parameter is used,
-                         domainId must also be used.
-        :type domainid: ``str``
+        :param   securitygroupname: The name of the security group.
+                                    Mutually exclusive with securitygroupid.
+        :type    securitygroupname: ``str``
 
-        :param startport: Start port for this ingress rule
-        :type  startport: ``int``
+        :param   protocol: Can be TCP, UDP or ICMP.
+                           Sometime other protocols can be used like AH, ESP
+                           or GRE.
+        :type    protocol: ``str``
 
-        :param securitygroupid: The ID of the security group.
-                                Mutually exclusive with securityGroupName
-                                parameter
-        :type  securitygroupid: ``str``
+        :param   cidrlist: Source address CIDR for which this rule applies.
+        :type    cidrlist: ``str``
 
-        :param cidrlist: The cidr list associated
-        :type  cidrlist: ``list``
+        :param   startport: Start port of the range for this ingress rule.
+                            Applies to protocols TCP and UDP.
+        :type    startport: ``int``
 
-        :param usersecuritygrouplist: user to security group mapping
-        :type  usersecuritygrouplist: ``dict``
+        :param   endport: End port of the range for this ingress rule.
+                          It can be None to set only one port.
+                          Applies to protocols TCP and UDP.
+        :type    endport: ``int``
 
-        :param securitygroupname: The name of the security group.
-                                  Mutually exclusive with
-                                  securityGroupName parameter
-        :type  securitygroupname: ``str``
+        :param   icmptype: Type of the ICMP packet (eg: 8 for Echo Request).
+                           -1 or None means "all types".
+                           Applies to protocol ICMP.
+        :type    icmptype: ``int``
 
-        :param account: An optional account for the security group.
-                        Must be used with domainId.
-        :type  account: ``str``
+        :param   icmpcode: Code of the ICMP packet for the specified type.
+                           If the specified type doesn't require a code set
+                           this value to 0.
+                           -1 or None means "all codes".
+                           Applies to protocol ICMP.
+        :type    icmpcode: ``int``
 
-        :param icmpcode: Error code for this icmp message
-        :type  icmpcode: ``int``
+        :keyword   account: An optional account for the security group.
+                            Must be used with domainId.
+        :type      account: ``str``
 
-        :param protocol: TCP is default. UDP is the other supported protocol
-        :type  protocol: ``str``
+        :keyword domainid: An optional domainId for the security group.
+                           If the account parameter is used, domainId must also
+                           be used.
 
-        :param icmptype: type of the icmp message being sent
-        :type  icmptype: ``int``
+        :keyword projectid: An optional project of the security group
+        :type    projectid: ``str``
 
-        :param projectid: An optional project of the security group
-        :type  projectid: ``str``
+        :keyword securitygroupid: The ID of the security group.
+                                  Mutually exclusive with securitygroupname
+        :type    securitygroupid: ``str``
 
-        :param endport: end port for this ingress rule
-        :type  endport: ``int``
+        :keyword usersecuritygrouplist: User to security group mapping
+        :type    usersecuritygrouplist: ``dict``
 
-        :rtype: ``list``
+        :rtype: ``dict``
         """
 
+        args = kwargs.copy()
         protocol = protocol.upper()
-        if protocol not in ('TCP', 'ICMP'):
-            raise LibcloudError('Only TCP and ICMP are allowed')
 
-        args = {
+        args.update({
             'securitygroupname': securitygroupname,
             'protocol': protocol,
-            'startport': int(startport),
             'cidrlist': cidrlist
-        }
-        if endport is None:
-            args['endport'] = int(startport)
+        })
+
+        if protocol not in ('TCP', 'UDP') and \
+                (startport is not None or endport is not None):
+            raise LibcloudError('"startport" and "endport" are only valid '
+                                'with protocol TCP or UDP.')
+
+        if protocol != 'ICMP' and \
+                (icmptype is not None or icmpcode is not None):
+            raise LibcloudError('"icmptype" and "icmpcode" are only valid '
+                                'with protocol ICMP.')
+
+        if protocol in ('TCP', 'UDP'):
+            if startport is None:
+                raise LibcloudError('Protocols TCP and UDP require at least '
+                                    '"startport" to be set.')
+            if startport is not None and endport is None:
+                endport = startport
+
+            args.update({
+                'startport': startport,
+                'endport': endport
+            })
+
+        if protocol == 'ICMP':
+            if icmptype is None:
+                icmptype = -1
+            if icmpcode is None:
+                icmpcode = -1
+
+            args.update({
+                'icmptype': icmptype,
+                'icmpcode': icmpcode
+            })
 
         return self._async_request(command='authorizeSecurityGroupIngress',
                                    params=args,
@@ -4334,7 +4680,8 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
             extra['tags'] = self._get_resource_tags(data['tags'])
 
         node = CloudStackNode(id=id, name=name, state=state,
-                              public_ips=public_ips, private_ips=private_ips,
+                              public_ips=list(set(public_ips)),
+                              private_ips=private_ips,
                               driver=self, extra=extra)
         return node
 
@@ -4376,10 +4723,9 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
         tags = {}
 
         for tag in tag_set:
-            for key, value in tag.iteritems():
-                key = tag['key']
-                value = tag['value']
-                tags[key] = value
+            key = tag['key']
+            value = tag['value']
+            tags[key] = value
 
         return tags
 
@@ -4407,3 +4753,14 @@ class CloudStackNodeDriver(CloudStackDriverMixIn, NodeDriver):
                 extra[attribute] = None
 
         return extra
+
+    def _to_volume_state(self, vol):
+        state = self.VOLUME_STATE_MAP.get(vol['state'],
+                                          StorageVolumeState.UNKNOWN)
+
+        # If a volume is 'Ready' and is attached to a virtualmachine, set
+        # the status to INUSE
+        if state == StorageVolumeState.AVAILABLE and 'virtualmachineid' in vol:
+            state = StorageVolumeState.INUSE
+
+        return state

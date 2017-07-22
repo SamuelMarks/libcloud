@@ -24,7 +24,8 @@ import datetime
 from libcloud.utils.py3 import httplib
 from libcloud.utils.iso8601 import parse_date
 
-from libcloud.common.base import ConnectionUserAndKey, Response
+from libcloud.common.base import (ConnectionUserAndKey, Response,
+                                  CertificateConnection)
 from libcloud.compute.types import (LibcloudError, InvalidCredsError,
                                     MalformedResponseError)
 
@@ -41,11 +42,13 @@ AUTH_VERSIONS_WITH_EXPIRES = [
     '2.0',
     '2.0_apikey',
     '2.0_password',
+    '2.0_voms',
     '3.0',
-    '3.x_password'
+    '3.x_password',
+    '3.x_oidc_access_token'
 ]
 
-# How many seconds to substract from the auth token expiration time before
+# How many seconds to subtract from the auth token expiration time before
 # testing if the token is still valid.
 # The time is subtracted to account for the HTTP request latency and prevent
 # user from getting "InvalidCredsError" if token is about to expire.
@@ -68,7 +71,9 @@ __all__ = [
     'OpenStackIdentity_1_0_Connection',
     'OpenStackIdentity_1_1_Connection',
     'OpenStackIdentity_2_0_Connection',
+    'OpenStackIdentity_2_0_Connection_VOMS',
     'OpenStackIdentity_3_0_Connection',
+    'OpenStackIdentity_3_0_Connection_OIDC_access_token',
 
     'get_class_for_auth_version'
 ]
@@ -162,7 +167,7 @@ class OpenStackServiceCatalog(object):
     """
     http://docs.openstack.org/api/openstack-identity-service/2.0/content/
 
-    This class should be instanciated with the contents of the
+    This class should be instantiated with the contents of the
     'serviceCatalog' in the auth response. This will do the work of figuring
     out which services actually exist in the catalog as well as split them up
     by type, name, and region if available
@@ -233,6 +238,10 @@ class OpenStackServiceCatalog(object):
         endpoints = []
 
         for entry in self._entries:
+            # Note: "if XXX and YYY != XXX" comparison is used to support
+            # partial lookups.
+            # This allows user to pass in only one argument to the method (only
+            # service_type or name), both of them or neither.
             if service_type and entry.service_type != service_type:
                 continue
 
@@ -419,6 +428,7 @@ class OpenStackServiceCatalog(object):
 
         for item in service_catalog:
             service_type = item['type']
+            service_name = item.get('name', None)
 
             entry_endpoints = []
             for endpoint in item['endpoints']:
@@ -438,6 +448,7 @@ class OpenStackServiceCatalog(object):
                 entry_endpoints.append(entry_endpoint)
 
             entry = OpenStackServiceCatalogEntry(service_type=service_type,
+                                                 service_name=service_name,
                                                  endpoints=entry_endpoints)
             entries.append(entry)
 
@@ -563,27 +574,30 @@ class OpenStackIdentityConnection(ConnectionUserAndKey):
     """
     responseCls = OpenStackAuthResponse
     timeout = None
+    auth_version = None
 
     def __init__(self, auth_url, user_id, key, tenant_name=None,
+                 domain_name='Default',
+                 token_scope=OpenStackIdentityTokenScope.PROJECT,
                  timeout=None, parent_conn=None):
         super(OpenStackIdentityConnection, self).__init__(user_id=user_id,
                                                           key=key,
                                                           url=auth_url,
                                                           timeout=timeout)
 
-        self.auth_url = auth_url
-        self.tenant_name = tenant_name
         self.parent_conn = parent_conn
 
         # enable tests to use the same mock connection classes.
         if parent_conn:
-            self.conn_classes = parent_conn.conn_classes
+            self.conn_class = parent_conn.conn_class
             self.driver = parent_conn.driver
         else:
             self.driver = None
 
         self.auth_url = auth_url
         self.tenant_name = tenant_name
+        self.domain_name = domain_name
+        self.token_scope = token_scope
         self.timeout = timeout
 
         self.urls = {}
@@ -769,8 +783,8 @@ class OpenStackIdentity_1_0_Connection(OpenStackIdentityConnection):
             self.auth_user_info = None
 
             if not self.auth_token:
-                raise MalformedResponseError('Missing X-Auth-Token in \
-                                              response headers')
+                raise MalformedResponseError('Missing X-Auth-Token in'
+                                             ' response headers')
 
         return self
 
@@ -934,8 +948,8 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
                             domain to scope the token to.
         :type domain_name: ``str``
 
-        :param token_scope: Whether to scope a token to a "project" or a
-                         "domain"
+        :param token_scope: Whether to scope a token to a "project", a
+                            "domain" or "unscoped"
         :type token_scope: ``str``
         """
         super(OpenStackIdentity_3_0_Connection,
@@ -943,23 +957,23 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
                              user_id=user_id,
                              key=key,
                              tenant_name=tenant_name,
+                             domain_name=domain_name,
+                             token_scope=token_scope,
                              timeout=timeout,
                              parent_conn=parent_conn)
-        if token_scope not in self.VALID_TOKEN_SCOPES:
-            raise ValueError('Invalid value for "token_scope" argument: %s' %
-                             (token_scope))
 
-        if (token_scope == OpenStackIdentityTokenScope.PROJECT and
-                (not tenant_name or not domain_name)):
+        if self.token_scope not in self.VALID_TOKEN_SCOPES:
+            raise ValueError('Invalid value for "token_scope" argument: %s' %
+                             (self.token_scope))
+
+        if (self.token_scope == OpenStackIdentityTokenScope.PROJECT and
+                (not self.tenant_name or not self.domain_name)):
             raise ValueError('Must provide tenant_name and domain_name '
                              'argument')
-        elif (token_scope == OpenStackIdentityTokenScope.DOMAIN and
-                not domain_name):
+        elif (self.token_scope == OpenStackIdentityTokenScope.DOMAIN and
+                not self.domain_name):
             raise ValueError('Must provide domain_name argument')
 
-        self.tenant_name = tenant_name
-        self.domain_name = domain_name
-        self.token_scope = token_scope
         self.auth_user_roles = None
 
     def authenticate(self, force=False):
@@ -1047,6 +1061,7 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
                                              missing required elements', e)
             body = 'code: %s body:%s' % (response.status, response.body)
         else:
+            body = 'code: %s body:%s' % (response.status, response.body)
             raise MalformedResponseError('Malformed response', body=body,
                                          driver=self.driver)
 
@@ -1102,7 +1117,7 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
         :param domain_id: ID of domain to retrieve information for.
         :type domain_id: ``str``
 
-        :rtyle: :class:`.OpenStackIdentityDomain`
+        :rtype: :class:`.OpenStackIdentityDomain`
         """
         response = self.authenticated_request('/v3/domains/%s' % (domain_id),
                                               method='GET')
@@ -1137,7 +1152,7 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
         """
         Grant domain role to a user.
 
-        Note: This function appears to be idempodent.
+        Note: This function appears to be idempotent.
 
         :param domain: Domain to grant the role to.
         :type domain: :class:`.OpenStackIdentityDomain`
@@ -1181,7 +1196,7 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
         """
         Grant project role to a user.
 
-        Note: This function appeats to be idempodent.
+        Note: This function appears to be idempotent.
 
         :param project: Project to grant the role to.
         :type project: :class:`.OpenStackIdentityDomain`
@@ -1368,6 +1383,295 @@ class OpenStackIdentity_3_0_Connection(OpenStackIdentityConnection):
         return role
 
 
+class OpenStackIdentity_3_0_Connection_OIDC_access_token(
+        OpenStackIdentity_3_0_Connection):
+    """
+    Connection class for Keystone API v3.x. using OpenID Connect tokens
+
+    The OIDC token must be set in the self.key attribute.
+
+    The identity provider name required to get the full path
+    must be set in the self.user_id attribute.
+
+    The protocol name required to get the full path
+    must be set in the self.tenant_name attribute.
+
+    The user must be scoped to the first project accessible with the
+    specified access token (usually there are only one)
+    """
+
+    responseCls = OpenStackAuthResponse
+    name = 'OpenStack Identity API v3.x with OIDC support'
+    auth_version = '3.0'
+
+    def authenticate(self, force=False):
+        """
+        Perform authentication.
+        """
+        if not self._is_authentication_needed(force=force):
+            return self
+
+        subject_token = self._get_unscoped_token_from_oidc_token()
+        project_id = self._get_project_id(token=subject_token)
+
+        data = {
+            'auth': {
+                'identity': {
+                    'methods': ['token'],
+                    'token': {
+                        'id': subject_token
+                    }
+                }
+            }
+        }
+
+        if self.token_scope == OpenStackIdentityTokenScope.PROJECT:
+            # Scope token to project (tenant)
+            data['auth']['scope'] = {
+                'project': {
+                    'id': project_id
+                }
+            }
+        elif self.token_scope == OpenStackIdentityTokenScope.DOMAIN:
+            # Scope token to domain
+            data['auth']['scope'] = {
+                'domain': {
+                    'name': self.domain_name
+                }
+            }
+        elif self.token_scope == OpenStackIdentityTokenScope.UNSCOPED:
+            pass
+        else:
+            raise ValueError('Token needs to be scoped either to project or '
+                             'a domain')
+
+        data = json.dumps(data)
+        response = self.request('/v3/auth/tokens', data=data,
+                                headers={'Content-Type': 'application/json'},
+                                method='POST')
+
+        if response.status == httplib.UNAUTHORIZED:
+            # Invalid credentials
+            raise InvalidCredsError()
+        elif response.status in [httplib.OK, httplib.CREATED]:
+            headers = response.headers
+
+            try:
+                body = json.loads(response.body)
+            except Exception:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Failed to parse JSON', e)
+
+            try:
+                roles = self._to_roles(body['token']['roles'])
+            except Exception:
+                e = sys.exc_info()[1]
+                roles = []
+
+            try:
+                expires = body['token']['expires_at']
+
+                self.auth_token = headers['x-subject-token']
+                self.auth_token_expires = parse_date(expires)
+                # Note: catalog is not returned for unscoped tokens
+                self.urls = body['token'].get('catalog', None)
+                self.auth_user_info = None
+                self.auth_user_roles = roles
+            except KeyError:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Auth JSON response is \
+                                             missing required elements', e)
+            body = 'code: %s body:%s' % (response.status, response.body)
+        else:
+            body = 'code: %s body:%s' % (response.status, response.body)
+            raise MalformedResponseError('Malformed response', body=body,
+                                         driver=self.driver)
+
+        return self
+
+    def _get_unscoped_token_from_oidc_token(self):
+        """
+        Get unscoped token from OIDC access token
+        """
+        path = ('/v3/OS-FEDERATION/identity_providers/%s/protocols/%s/auth' %
+                (self.user_id, self.tenant_name))
+        response = self.request(path,
+                                headers={'Content-Type': 'application/json',
+                                         'Authorization': 'Bearer %s' %
+                                         self.key},
+                                method='GET')
+
+        if response.status == httplib.UNAUTHORIZED:
+            # Invalid credentials
+            raise InvalidCredsError()
+        elif response.status in [httplib.OK, httplib.CREATED]:
+            if 'x-subject-token' in response.headers:
+                return response.headers['x-subject-token']
+            else:
+                raise MalformedResponseError('No x-subject-token returned',
+                                             driver=self.driver)
+        else:
+            raise MalformedResponseError('Malformed response',
+                                         driver=self.driver)
+
+    def _get_project_id(self, token):
+        """
+        Get the first project ID accessible with the specified access token
+        """
+        path = '/v3/OS-FEDERATION/projects'
+        response = self.request(path,
+                                headers={'Content-Type': 'application/json',
+                                         'X-Auth-Token': token},
+                                method='GET')
+
+        if response.status == httplib.UNAUTHORIZED:
+            # Invalid credentials
+            raise InvalidCredsError()
+        elif response.status in [httplib.OK, httplib.CREATED]:
+            try:
+                body = json.loads(response.body)
+                return body["projects"][0]["id"]
+            except Exception:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Failed to parse JSON', e)
+        else:
+            raise MalformedResponseError('Malformed response',
+                                         driver=self.driver)
+
+
+class OpenStackIdentity_2_0_Connection_VOMS(OpenStackIdentityConnection,
+                                            CertificateConnection):
+    """
+    Connection class for Keystone API v2.0. with VOMS proxy support
+    In this case the key parameter will be the path of the VOMS proxy file.
+    """
+
+    responseCls = OpenStackAuthResponse
+    name = 'OpenStack Identity API v2.0 VOMS support'
+    auth_version = '2.0'
+
+    def __init__(self, auth_url, user_id, key, tenant_name=None,
+                 domain_name='Default',
+                 token_scope=OpenStackIdentityTokenScope.PROJECT,
+                 timeout=None, parent_conn=None):
+        CertificateConnection.__init__(self, cert_file=key,
+                                       url=auth_url,
+                                       timeout=timeout)
+
+        self.parent_conn = parent_conn
+
+        # enable tests to use the same mock connection classes.
+        if parent_conn:
+            self.conn_class = parent_conn.conn_class
+            self.driver = parent_conn.driver
+        else:
+            self.driver = None
+
+        self.auth_url = auth_url
+        self.tenant_name = tenant_name
+        self.domain_name = domain_name
+        self.token_scope = token_scope
+        self.timeout = timeout
+
+        self.urls = {}
+        self.auth_token = None
+        self.auth_token_expires = None
+        self.auth_user_info = None
+
+    def authenticate(self, force=False):
+        if not self._is_authentication_needed(force=force):
+            return self
+
+        tenant = self.tenant_name
+        if not tenant:
+            # if the tenant name is not specified look for it
+            token = self._get_unscoped_token()
+            tenant = self._get_tenant_name(token)
+
+        data = {'auth': {'voms': True, 'tenantName': tenant}}
+
+        reqbody = json.dumps(data)
+        return self._authenticate_2_0_with_body(reqbody)
+
+    def _get_unscoped_token(self):
+        """
+        Get unscoped token from VOMS proxy
+        """
+        data = {'auth': {'voms': True}}
+        reqbody = json.dumps(data)
+
+        response = self.request('/v2.0/tokens', data=reqbody,
+                                headers={'Content-Type': 'application/json'},
+                                method='POST')
+
+        if response.status == httplib.UNAUTHORIZED:
+            # Invalid credentials
+            raise InvalidCredsError()
+        elif response.status in [httplib.OK, httplib.CREATED]:
+            try:
+                body = json.loads(response.body)
+                return body['access']['token']['id']
+            except Exception:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Failed to parse JSON', e)
+        else:
+            raise MalformedResponseError('Malformed response',
+                                         driver=self.driver)
+
+    def _get_tenant_name(self, token):
+        """
+        Get the first available tenant name (usually there are only one)
+        """
+        headers = {'Accept': 'application/json',
+                   'Content-Type': 'application/json',
+                   'X-Auth-Token': token}
+        response = self.request('/v2.0/tenants', headers=headers, method='GET')
+
+        if response.status == httplib.UNAUTHORIZED:
+            # Invalid credentials
+            raise InvalidCredsError()
+        elif response.status in [httplib.OK, httplib.CREATED]:
+            try:
+                body = json.loads(response.body)
+                return body["tenants"][0]["name"]
+            except Exception:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Failed to parse JSON', e)
+        else:
+            raise MalformedResponseError('Malformed response',
+                                         driver=self.driver)
+
+    def _authenticate_2_0_with_body(self, reqbody):
+        resp = self.request('/v2.0/tokens', data=reqbody,
+                            headers={'Content-Type': 'application/json'},
+                            method='POST')
+
+        if resp.status == httplib.UNAUTHORIZED:
+            raise InvalidCredsError()
+        elif resp.status not in [httplib.OK,
+                                 httplib.NON_AUTHORITATIVE_INFORMATION]:
+            body = 'code: %s body: %s' % (resp.status, resp.body)
+            raise MalformedResponseError('Malformed response', body=body,
+                                         driver=self.driver)
+        else:
+            body = resp.object
+
+            try:
+                access = body['access']
+                expires = access['token']['expires']
+
+                self.auth_token = access['token']['id']
+                self.auth_token_expires = parse_date(expires)
+                self.urls = access['serviceCatalog']
+                self.auth_user_info = access.get('user', {})
+            except KeyError:
+                e = sys.exc_info()[1]
+                raise MalformedResponseError('Auth JSON response is \
+                                             missing required elements', e)
+
+        return self
+
+
 def get_class_for_auth_version(auth_version):
     """
     Retrieve class for the provided auth version.
@@ -1380,8 +1684,12 @@ def get_class_for_auth_version(auth_version):
         cls = OpenStackIdentity_2_0_Connection
     elif auth_version == '2.0_password':
         cls = OpenStackIdentity_2_0_Connection
+    elif auth_version == '2.0_voms':
+        cls = OpenStackIdentity_2_0_Connection_VOMS
     elif auth_version == '3.x_password':
         cls = OpenStackIdentity_3_0_Connection
+    elif auth_version == '3.x_oidc_access_token':
+        cls = OpenStackIdentity_3_0_Connection_OIDC_access_token
     else:
         raise LibcloudError('Unsupported Auth Version requested')
 

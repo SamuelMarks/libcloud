@@ -16,9 +16,19 @@
 import os
 import sys
 import binascii
+import socket
+import time
+import ssl
+from datetime import datetime, timedelta
+from functools import wraps
 
+from libcloud.utils.py3 import httplib
+from libcloud.common.exceptions import RateLimitReachedError
+from libcloud.common.providers import get_driver as _get_driver
+from libcloud.common.providers import set_driver as _set_driver
 
 __all__ = [
+    'find',
     'get_driver',
     'set_driver',
     'merge_valid_keys',
@@ -27,53 +37,40 @@ __all__ = [
     'dict2str',
     'reverse_dict',
     'lowercase_keys',
-    'get_secure_random_string'
+    'get_secure_random_string',
+    'retry',
+
+    'ReprMixin'
 ]
 
-
-def get_driver(drivers, provider):
-    """
-    Get a driver.
-
-    :param drivers: Dictionary containing valid providers.
-    :param provider: Id of provider to get driver
-    :type provider: :class:`libcloud.types.Provider`
-    """
-    if provider in drivers:
-        mod_name, driver_name = drivers[provider]
-        _mod = __import__(mod_name, globals(), locals(), [driver_name])
-        return getattr(_mod, driver_name)
-
-    raise AttributeError('Provider %s does not exist' % (provider))
+# Error message which indicates a transient SSL error upon which request
+# can be retried
+TRANSIENT_SSL_ERROR = 'The read operation timed out'
 
 
-def set_driver(drivers, provider, module, klass):
-    """
-    Sets a driver.
+class TransientSSLError(ssl.SSLError):
+    """Represent transient SSL errors, e.g. timeouts"""
+    pass
 
-    :param drivers: Dictionary to store providers.
-    :param provider: Id of provider to set driver for
-    :type provider: :class:`libcloud.types.Provider`
-    :param module: The module which contains the driver
-    :type module: L
-    :param klass: The driver class name
-    :type klass:
-    """
 
-    if provider in drivers:
-        raise AttributeError('Provider %s already registered' % (provider))
+# Constants used by the ``retry`` decorator
+DEFAULT_TIMEOUT = 30  # default retry timeout
+DEFAULT_DELAY = 1  # default sleep delay used in each iterator
+DEFAULT_BACKOFF = 1  # retry backup multiplier
+RETRY_EXCEPTIONS = (RateLimitReachedError, socket.error, socket.gaierror,
+                    httplib.NotConnected, httplib.ImproperConnectionState,
+                    TransientSSLError)
 
-    drivers[provider] = (module, klass)
 
-    # Check if this driver is valid
-    try:
-        driver = get_driver(drivers, provider)
-    except (ImportError, AttributeError):
-        exp = sys.exc_info()[1]
-        drivers.pop(provider)
-        raise exp
+def find(l, predicate):
+    results = [x for x in l if predicate(x)]
+    return results[0] if len(results) > 0 else None
 
-    return driver
+
+# Note: Those are aliases for backward-compatibility for functions which have
+# been moved to "libcloud.common.providers" module
+get_driver = _get_driver
+set_driver = _set_driver
 
 
 def merge_valid_keys(params, valid_keys, extra):
@@ -252,3 +249,92 @@ def get_secure_random_string(size):
     value = binascii.hexlify(value)
     value = value.decode('utf-8')[:size]
     return value
+
+
+class ReprMixin(object):
+    """
+    Mixin class which adds __repr__ and __str__ methods for the attributes
+    specified on the class.
+    """
+
+    _repr_attributes = []
+
+    def __repr__(self):
+        attributes = []
+        for attribute in self._repr_attributes:
+            value = getattr(self, attribute, None)
+            attributes.append('%s=%s' % (attribute, value))
+
+        values = (self.__class__.__name__, ', '.join(attributes))
+        result = '<%s %s>' % values
+        return result
+
+    def __str__(self):
+        return str(self.__repr__())
+
+
+def retry(retry_exceptions=RETRY_EXCEPTIONS, retry_delay=DEFAULT_DELAY,
+          timeout=DEFAULT_TIMEOUT, backoff=DEFAULT_BACKOFF):
+    """
+    Retry decorator that helps to handle common transient exceptions.
+
+    :param retry_exceptions: types of exceptions to retry on.
+    :param retry_delay: retry delay between the attempts.
+    :param timeout: maximum time to wait.
+    :param backoff: multiplier added to delay between attempts.
+
+    :Example:
+
+    retry_request = retry(timeout=1, retry_delay=1, backoff=1)
+    retry_request(self.connection.request)()
+    """
+    if retry_exceptions is None:
+        retry_exceptions = RETRY_EXCEPTIONS
+    if retry_delay is None:
+        retry_delay = DEFAULT_DELAY
+    if timeout is None:
+        timeout = DEFAULT_TIMEOUT
+    if backoff is None:
+        backoff = DEFAULT_BACKOFF
+
+    timeout = max(timeout, 0)
+
+    def transform_ssl_error(func, *args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ssl.SSLError:
+            exc = sys.exc_info()[1]
+
+            if TRANSIENT_SSL_ERROR in str(exc):
+                raise TransientSSLError(*exc.args)
+
+            raise exc
+
+    def decorator(func):
+        @wraps(func)
+        def retry_loop(*args, **kwargs):
+            current_delay = retry_delay
+            end = datetime.now() + timedelta(seconds=timeout)
+
+            while True:
+                try:
+                    return transform_ssl_error(func, *args, **kwargs)
+                except retry_exceptions:
+                    exc = sys.exc_info()[1]
+
+                    if isinstance(exc, RateLimitReachedError):
+                        time.sleep(exc.retry_after)
+
+                        # Reset retries if we're told to wait due to rate
+                        # limiting
+                        current_delay = retry_delay
+                        end = datetime.now() + timedelta(
+                            seconds=exc.retry_after + timeout)
+                    elif datetime.now() >= end:
+                        raise
+                    else:
+                        time.sleep(current_delay)
+                        current_delay *= backoff
+
+        return retry_loop
+    return decorator

@@ -37,14 +37,21 @@ LINUX_PRICING_URLS = [
 
 EC2_REGIONS = [
     'us-east-1',
+    'us-east-2',
     'us-west-1',
     'us-west-2',
+    'us-gov-west-1',
     'eu-west-1',
+    'eu-west-2',
     'eu-central-1',
+    'ca-central-1',
     'ap-southeast-1',
     'ap-southeast-2',
     'ap-northeast-1',
-    'sa-east-1'
+    'ap-northeast-2',
+    'ap-south-1',
+    'sa-east-1',
+    'cn-north-1',
 ]
 
 EC2_INSTANCE_TYPES = [
@@ -75,6 +82,7 @@ EC2_INSTANCE_TYPES = [
     'd2.8xlarge',
     'cg1.4xlarge',
     'g2.2xlarge',
+    'g2.8xlarge',
     'cr1.8xlarge',
     'hs1.4xlarge',
     'hs1.8xlarge',
@@ -82,35 +90,67 @@ EC2_INSTANCE_TYPES = [
     'i2.2xlarge',
     'i2.4xlarge',
     'i2.8xlarge',
+    'i3.large',
+    'i3.xlarge',
+    'i3.2xlarge',
+    'i3.4xlarge',
+    'i3.8xlarge',
+    'i3.16large',
     'r3.large',
     'r3.xlarge',
     'r3.2xlarge',
     'r3.4xlarge',
     'r3.8xlarge',
+    'r4.large',
+    'r4.xlarge',
+    'r4.2xlarge',
+    'r4.4xlarge',
+    'r4.8xlarge',
+    'r4.16xlarge',
     't2.micro',
     't2.small',
-    't2.medium'
+    't2.medium',
+    't2.large',
+    'x1.32xlarge'
 ]
 
 # Maps EC2 region name to region name used in the pricing file
 REGION_NAME_MAP = {
     'us-east': 'ec2_us_east',
     'us-east-1': 'ec2_us_east',
+    'us-east-2': 'ec2_us_east_ohio',
     'us-west': 'ec2_us_west',
     'us-west-1': 'ec2_us_west',
     'us-west-2': 'ec2_us_west_oregon',
     'eu-west-1': 'ec2_eu_west',
+    'eu-west-2': 'ec2_eu_west_2',
     'eu-ireland': 'ec2_eu_west',
     'eu-central-1': 'ec2_eu_central',
+    'ca-central-1': 'ec2_ca_central',
     'apac-sin': 'ec2_ap_southeast',
     'ap-southeast-1': 'ec2_ap_southeast',
     'apac-syd': 'ec2_ap_southeast_2',
     'ap-southeast-2': 'ec2_ap_southeast_2',
     'apac-tokyo': 'ec2_ap_northeast',
     'ap-northeast-1': 'ec2_ap_northeast',
+    'ap-northeast-2': 'ec2_ap_northeast',
+    'ap-south-1': 'ec2_ap_south_1',
     'sa-east-1': 'ec2_sa_east',
-    'us-gov-west-1': 'ec2_us_govwest'
+    'us-gov-west-1': 'ec2_us_govwest',
+    'cn-north-1': 'ec2_cn_north',
 }
+
+INSTANCE_SIZES = [
+    'micro',
+    'small',
+    'medium',
+    'large',
+    'xlarge',
+    'x-large',
+    'extra-large'
+]
+
+RE_NUMERIC_OTHER = re.compile(r'(?:([0-9]+)|([-A-Z_a-z]+)|([^-0-9A-Z_a-z]+))')
 
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 PRICING_FILE_PATH = os.path.join(BASE_PATH, '../libcloud/data/pricing.json')
@@ -145,7 +185,11 @@ def scrape_ec2_pricing():
 
                 for size in sizes:
                     price = size['valueColumns'][0]['prices']['USD']
-                    result[libcloud_region_name][size['size']] = price
+                    if str(price).lower() == 'n/a':
+                        # Price not available
+                        continue
+
+                    result[libcloud_region_name][size['size']] = float(price)
 
     return result
 
@@ -176,13 +220,24 @@ def sort_nested_dict(value):
     """
     result = OrderedDict()
 
-    for key, value in sorted(value.items()):
+    for key, value in sorted(value.items(), key=sort_key_by_numeric_other):
         if isinstance(value, (dict, OrderedDict)):
             result[key] = sort_nested_dict(value)
         else:
             result[key] = value
 
     return result
+
+
+def sort_key_by_numeric_other(key_value):
+    """
+    Split key into numeric, alpha and other part and sort accordingly.
+    """
+    return tuple((
+        int(numeric) if numeric else None,
+        INSTANCE_SIZES.index(alpha) if alpha in INSTANCE_SIZES else alpha,
+        other
+    ) for (numeric, alpha, other) in RE_NUMERIC_OTHER.findall(key_value[0]))
 
 
 def main():

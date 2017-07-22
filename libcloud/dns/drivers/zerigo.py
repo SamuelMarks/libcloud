@@ -24,11 +24,7 @@ import base64
 from libcloud.utils.py3 import httplib
 from libcloud.utils.py3 import b
 
-try:
-    from lxml import etree as ET
-except ImportError:
-    from xml.etree import ElementTree as ET
-
+from libcloud.utils.py3 import ET
 from libcloud.utils.misc import merge_valid_keys, get_new_obj
 from libcloud.utils.xml import findtext, findall
 from libcloud.common.base import XmlResponse, ConnectionUserAndKey
@@ -438,7 +434,7 @@ class ZerigoDNSDriver(DNSDriver):
                  'priority': priority, 'ttl': ttl}
 
         record = Record(id=id, name=name, type=type, data=data,
-                        zone=zone, driver=self, extra=extra)
+                        zone=zone, driver=self, ttl=ttl, extra=extra)
         return record
 
     def _get_more(self, rtype, **kwargs):

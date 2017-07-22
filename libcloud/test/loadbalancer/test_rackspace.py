@@ -29,12 +29,11 @@ from libcloud.loadbalancer.types import MemberCondition
 from libcloud.loadbalancer.drivers.rackspace import RackspaceLBDriver, \
     RackspaceHealthMonitor, RackspaceHTTPHealthMonitor, \
     RackspaceConnectionThrottle, RackspaceAccessRule
-from libcloud.loadbalancer.drivers.rackspace import RackspaceUKLBDriver
 from libcloud.loadbalancer.drivers.rackspace import RackspaceAccessRuleType
 from libcloud.common.types import LibcloudError
 
 from libcloud.test import unittest
-from libcloud.test import MockHttpTestCase
+from libcloud.test import MockHttp
 from libcloud.test.file_fixtures import LoadBalancerFileFixtures
 from libcloud.test.file_fixtures import OpenStackFixtures
 
@@ -42,8 +41,7 @@ from libcloud.test.file_fixtures import OpenStackFixtures
 class RackspaceLBTests(unittest.TestCase):
 
     def setUp(self):
-        RackspaceLBDriver.connectionCls.conn_classes = (None,
-                                                        RackspaceLBMockHttp)
+        RackspaceLBDriver.connectionCls.conn_class = RackspaceLBMockHttp
         RackspaceLBMockHttp.type = None
         self.driver = RackspaceLBDriver('user', 'key')
         self.driver.connection.poll_interval = 0.0
@@ -135,6 +133,8 @@ class RackspaceLBTests(unittest.TestCase):
         self.assertEqual(balancers[0].id, "8155")
         self.assertEqual(balancers[0].port, 80)
         self.assertEqual(balancers[0].ip, "1.1.1.25")
+        self.assertTrue(balancers[0].extra.get('service_name') is not None)
+        self.assertTrue(balancers[0].extra.get('uri') is not None)
         self.assertEqual(balancers[1].name, "test1")
         self.assertEqual(balancers[1].id, "8156")
 
@@ -166,8 +166,7 @@ class RackspaceLBTests(unittest.TestCase):
         self.assertEqual(balancer.id, '8290')
 
     def test_ex_create_balancer(self):
-        RackspaceLBDriver.connectionCls.conn_classes = (None,
-                                                        RackspaceLBWithVIPMockHttp)
+        RackspaceLBDriver.connectionCls.conn_class = RackspaceLBWithVIPMockHttp
         RackspaceLBMockHttp.type = None
         driver = RackspaceLBDriver('user', 'key')
         balancer = driver.ex_create_balancer(name='test2',
@@ -917,15 +916,14 @@ class RackspaceLBTests(unittest.TestCase):
 class RackspaceUKLBTests(RackspaceLBTests):
 
     def setUp(self):
-        RackspaceLBDriver.connectionCls.conn_classes = (None,
-                                                        RackspaceLBMockHttp)
+        RackspaceLBDriver.connectionCls.conn_class = RackspaceLBMockHttp
         RackspaceLBMockHttp.type = None
-        self.driver = RackspaceUKLBDriver('user', 'key')
+        self.driver = RackspaceLBDriver('user', 'key', region='lon')
         # normally authentication happens lazily, but we force it here
         self.driver.connection._populate_hosts_and_request_paths()
 
 
-class RackspaceLBMockHttp(MockHttpTestCase):
+class RackspaceLBMockHttp(MockHttp, unittest.TestCase):
     fixtures = LoadBalancerFileFixtures('rackspace')
     auth_fixtures = OpenStackFixtures()
 
@@ -1482,7 +1480,7 @@ class RackspaceLBMockHttp(MockHttpTestCase):
         raise NotImplementedError
 
 
-class RackspaceLBWithVIPMockHttp(MockHttpTestCase):
+class RackspaceLBWithVIPMockHttp(MockHttp, unittest.TestCase):
     fixtures = LoadBalancerFileFixtures('rackspace')
     auth_fixtures = OpenStackFixtures()
 

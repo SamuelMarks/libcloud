@@ -34,16 +34,6 @@ class ElasticStackTestCase(object):
 
     def setUp(self):
         # Re-use ElasticHosts fixtures for the base ElasticStack platform tests
-        """ElasticStack.type = Provider.ELASTICHOSTS
-        ElasticStack.api_name = 'elastichosts'
-
-        ElasticStackBaseConnection.host = 'test.com'
-        ElasticStack.connectionCls.conn_classes = (None,
-                                                   ElasticStackMockHttp)
-        ElasticStack._standard_drives = ElasticHosts._standard_drives
-
-        self.driver = ElasticStack('foo', 'bar')
-        """
         self.mockHttp = ElasticStackMockHttp
         self.mockHttp.type = None
 
@@ -159,8 +149,7 @@ class ElasticStackTestCase(object):
 class ElasticHostsTestCase(ElasticStackTestCase, unittest.TestCase):
 
     def setUp(self):
-        ElasticHosts.connectionCls.conn_classes = (None,
-                                                   ElasticStackMockHttp)
+        ElasticHosts.connectionCls.conn_class = ElasticStackMockHttp
 
         self.driver = ElasticHosts('foo', 'bar')
         images = self.driver.list_images()
@@ -191,8 +180,7 @@ class ElasticHostsTestCase(ElasticStackTestCase, unittest.TestCase):
 class SkaliCloudTestCase(ElasticStackTestCase, unittest.TestCase):
 
     def setUp(self):
-        SkaliCloud.connectionCls.conn_classes = (None,
-                                                 ElasticStackMockHttp)
+        SkaliCloud.connectionCls.conn_class = ElasticStackMockHttp
 
         self.driver = SkaliCloud('foo', 'bar')
 
@@ -205,8 +193,7 @@ class SkaliCloudTestCase(ElasticStackTestCase, unittest.TestCase):
 class ServerLoveTestCase(ElasticStackTestCase, unittest.TestCase):
 
     def setUp(self):
-        ServerLove.connectionCls.conn_classes = (None,
-                                                 ElasticStackMockHttp)
+        ServerLove.connectionCls.conn_class = ElasticStackMockHttp
 
         self.driver = ServerLove('foo', 'bar')
 
