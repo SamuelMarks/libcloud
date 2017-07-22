@@ -17,21 +17,22 @@ from libcloud.test import LibcloudTestCase
 from libcloud.test import MockHttp
 from libcloud.compute.types import Provider
 from libcloud.compute.providers import get_driver
+from libcloud.test.secrets import AZURE_PARAMS
 
 
 class AzureNodeDriverTests(LibcloudTestCase):
 
-    TENANT_ID = 'e3cf3c98-a978-465f-8254-9d541eeea73c'
-    SUBSCRIPTION_ID = '35867a13-9915-428e-a146-97f3039bba98'
-    APPLICATION_ID = '8038bf1e-2ccc-4103-8d0c-03cabdb6319c'
-    APPLICATION_PASS = 'p4ssw0rd'
+    TENANT_ID = AZURE_PARAMS.tenant_id
+    SUBSCRIPTION_ID = AZURE_PARAMS.subscription_id
+    APPLICATION_ID = AZURE_PARAMS.application_id
+    APPLICATION_PASS = AZURE_PARAMS.application_pass
 
     def setUp(self):
         Azure = get_driver(Provider.AZURE_ARM)
         Azure.connectionCls.conn_class = AzureMockHttp
         self.driver = Azure(self.TENANT_ID, self.SUBSCRIPTION_ID,
                             self.APPLICATION_ID, self.APPLICATION_PASS,
-                            region='eastus')
+                            region=AZURE_PARAMS.location)
 
     def test_list_nodes(self):
         nodes = self.driver.list_nodes()

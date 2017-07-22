@@ -164,26 +164,38 @@ class AzureNodeDriver(NodeDriver):
     type = Provider.AZURE_ARM
     features = {'create_node': ['ssh_key', 'password']}
 
-    # The API doesn't provide state or country information, so fill it in.
-    # Information from https://azure.microsoft.com/en-us/regions/
+    api_version = '2016-06-01'
+
+    # Output of: az account list-locations
+    # | python -c 'import json,sys;obj=json.load(sys.stdin); print json.dumps({o["name"]:o["displayName"] for o in obj},
+    #                                                                         indent=4, sort_keys=True);'
     _location_to_country = {
-        "centralus": "Iowa, USA",
-        "eastus": "Virginia, USA",
-        "eastus2": "Virginia, USA",
-        "usgoviowa": "Iowa, USA",
-        "usgovvirginia": "Virginia, USA",
-        "northcentralus": "Illinois, USA",
-        "southcentralus": "Texas, USA",
-        "westus": "California, USA",
-        "northeurope": "Ireland",
-        "westeurope": "Netherlands",
-        "eastasia": "Hong Kong",
-        "southeastasia": "Singapore",
-        "japaneast": "Tokyo, Japan",
-        "japanwest": "Osaka, Japan",
-        "brazilsouth": "Sao Paulo State, Brazil",
-        "australiaeast": "New South Wales, Australia",
-        "australiasoutheast": "Victoria, Australia"
+        "australiaeast": "Australia East",
+        "australiasoutheast": "Australia Southeast",
+        "brazilsouth": "Brazil South",
+        "canadacentral": "Canada Central",
+        "canadaeast": "Canada East",
+        "centralindia": "Central India",
+        "centralus": "Central US",
+        "eastasia": "East Asia",
+        "eastus": "East US",
+        "eastus2": "East US 2",
+        "japaneast": "Japan East",
+        "japanwest": "Japan West",
+        "koreacentral": "Korea Central",
+        "koreasouth": "Korea South",
+        "northcentralus": "North Central US",
+        "northeurope": "North Europe",
+        "southcentralus": "South Central US",
+        "southeastasia": "Southeast Asia",
+        "southindia": "South India",
+        "uksouth": "UK South",
+        "ukwest": "UK West",
+        "westcentralus": "West Central US",
+        "westeurope": "West Europe",
+        "westindia": "West India",
+        "westus": "West US",
+        "westus2": "West US 2"
     }
 
     def __init__(self, tenant_id, subscription_id, key, secret,
@@ -206,6 +218,18 @@ class AzureNodeDriver(NodeDriver):
                                                  self)
         else:
             self.default_location = None
+
+    def ex_get_regions(self):
+        """
+        Lists all regions. Equivalent to `az account list-locations`.
+
+        :return: list of node location objects
+        :rtype: ``dict`` of {string: string}
+        """
+        action = "/subscriptions/%s/locations" % self.subscription_id
+        r = self.connection.request(action, params={"api-version": AzureNodeDriver.api_version})
+        self._location_to_country = dict((o['name'],o['displayName']) for o in r.object['value'])
+        return self._location_to_country
 
     def list_locations(self):
         """
