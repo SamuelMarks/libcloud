@@ -15,6 +15,8 @@
 
 from __future__ import with_statement
 
+from collections import OrderedDict
+
 import os
 import sys
 from datetime import datetime
@@ -81,7 +83,7 @@ class BaseEC2Tests(LibcloudTestCase):
                 sizes = driver.list_sizes()
                 if no_pricing:
                     self.assertTrue(all([s.price is None for s in sizes]))
-            except:
+            except Exception:
                 unsupported_regions.append(region)
 
         if unsupported_regions:
@@ -105,14 +107,14 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         token = 'temporary_credentials_token'
         driver = EC2NodeDriver(*EC2_PARAMS, **{'region': self.region, 'token': token})
         self.assertTrue(hasattr(driver, 'token'), 'Driver has no attribute token')
-        self.assertEquals(token, driver.token, "Driver token does not match with provided token")
+        self.assertEqual(token, driver.token, "Driver token does not match with provided token")
 
     def test_driver_with_token_signature_version(self):
         token = 'temporary_credentials_token'
         driver = EC2NodeDriver(*EC2_PARAMS, **{'region': self.region, 'token': token})
         kwargs = driver._ex_connection_class_kwargs()
         self.assertIn('signature_version', kwargs)
-        self.assertEquals('4', kwargs['signature_version'], 'Signature version is not 4 with temporary credentials')
+        self.assertEqual('4', kwargs['signature_version'], 'Signature version is not 4 with temporary credentials')
 
     def test_create_node(self):
         image = NodeImage(id='ami-be3adfd7',
@@ -214,8 +216,7 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
             self.driver.create_node(name='foo', image=image, size=size,
                                     ex_mincount='2', ex_maxcount='2',
                                     ex_clienttoken=token)
-        except IdempotentParamError:
-            e = sys.exc_info()[1]
+        except IdempotentParamError as e:
             idem_error = e
         self.assertTrue(idem_error is not None)
 
@@ -673,7 +674,7 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
 
     def test_import_key_pair_from_string(self):
         path = os.path.join(os.path.dirname(__file__), 'fixtures', 'misc',
-                            'dummy_rsa.pub')
+                            'test_rsa.pub')
 
         with open(path, 'r') as fp:
             key_material = fp.read()
@@ -691,7 +692,7 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
 
     def test_import_key_pair_from_file(self):
         path = os.path.join(os.path.dirname(__file__), 'fixtures', 'misc',
-                            'dummy_rsa.pub')
+                            'test_rsa.pub')
 
         key = self.driver.import_key_pair_from_file('keypair', path)
         self.assertEqual(key.name, 'keypair')
@@ -869,6 +870,13 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         self.assertEqual('snap-30d37269', volumes[2].extra['snapshot_id'])
         self.assertEqual(StorageVolumeState.UNKNOWN, volumes[2].state)
 
+        EC2MockHttp.type = 'filters_nodes'
+        node = Node('i-d334b4b3', None, None, None, None, self.driver)
+        self.driver.list_volumes(node=node)
+
+        EC2MockHttp.type = 'filters_status'
+        self.driver.list_volumes(ex_filters={'status': 'available'})
+
     def test_create_volume(self):
         location = self.driver.list_locations()[0]
         vol = self.driver.create_volume(10, 'vol', location)
@@ -932,6 +940,14 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         self.assertEqual(VolumeSnapshotState.CREATING, snap.state)
         # 2013-08-15T16:22:30.000Z
         self.assertEqual(datetime(2013, 8, 15, 16, 22, 30, tzinfo=UTC), snap.created)
+
+    def test_create_volume_snapshot_with_tags(self):
+        vol = StorageVolume(id='vol-4282672b', name='test',
+                            state=StorageVolumeState.AVAILABLE,
+                            size=10, driver=self.driver)
+        snap = self.driver.create_volume_snapshot(
+            vol, 'Test snapshot', ex_metadata={'my_tag': 'test'})
+        self.assertEqual('test', snap.extra['tags']['my_tag'])
 
     def test_list_snapshots(self):
         snaps = self.driver.list_snapshots()
@@ -1098,8 +1114,11 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
 
     def test_ex_list_networks_filters(self):
         EC2MockHttp.type = 'filters'
-        filters = {'dhcp-options-id': 'dopt-7eded312',  # matches two networks
-                   'cidr': '192.168.51.0/24'}  # matches one network
+
+        filters = OrderedDict([
+            ('dhcp-options-id', 'dopt-7eded312'),  # matches two networks
+            ('cidr', '192.168.51.0/24')  # matches two networks
+        ])
 
         # We assert in the mock http method
         self.driver.ex_list_networks(filters=filters)
@@ -1142,6 +1161,24 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         self.assertEqual('subnet-ce0e7ce6', subnet.id)
         self.assertEqual('pending', subnet.state)
         self.assertEqual('vpc-532135d1', subnet.extra['vpc_id'])
+
+    def test_ex_modify_subnet_attribute(self):
+        subnet = self.driver.ex_list_subnets()[0]
+        resp = self.driver.ex_modify_subnet_attribute(subnet,
+                                                      'auto_public_ip',
+                                                      True)
+        self.assertTrue(resp)
+        resp = self.driver.ex_modify_subnet_attribute(subnet,
+                                                      'auto_ipv6',
+                                                      False)
+        self.assertTrue(resp)
+
+        expected_msg = 'Unsupported attribute: invalid'
+        self.assertRaisesRegexp(ValueError, expected_msg,
+                                self.driver.ex_modify_subnet_attribute,
+                                subnet,
+                                'invalid',
+                                True)
 
     def test_ex_delete_subnet(self):
         subnet = self.driver.ex_list_subnets()[0]
@@ -1540,6 +1577,28 @@ class EC2MockHttp(MockHttp):
         body = self.fixtures.load('describe_volumes.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
 
+    def _filters_nodes_DescribeVolumes(self, method, url, body, headers):
+        expected_params = {
+            'Filter.1.Name': 'attachment.instance-id',
+            'Filter.1.Value.1': 'i-d334b4b3',
+        }
+
+        self.assertUrlContainsQueryParams(url, expected_params)
+
+        body = self.fixtures.load('describe_volumes.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
+    def _filters_status_DescribeVolumes(self, method, url, body, headers):
+        expected_params = {
+            'Filter.1.Name': 'status',
+            'Filter.1.Value.1': 'available'
+        }
+
+        self.assertUrlContainsQueryParams(url, expected_params)
+
+        body = self.fixtures.load('describe_volumes.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
     def _CreateSnapshot(self, method, url, body, headers):
         body = self.fixtures.load('create_snapshot.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
@@ -1596,25 +1655,14 @@ class EC2MockHttp(MockHttp):
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
 
     def _filters_DescribeVpcs(self, method, url, body, headers):
-        expected_params_1 = {
+        expected_params = {
             'Filter.1.Name': 'dhcp-options-id',
             'Filter.1.Value.1': 'dopt-7eded312',
             'Filter.2.Name': 'cidr',
             'Filter.2.Value.1': '192.168.51.0/24'
         }
 
-        expected_params_2 = {
-            'Filter.1.Name': 'cidr',
-            'Filter.1.Value.1': '192.168.51.0/24',
-            'Filter.2.Name': 'dhcp-options-id',
-            'Filter.2.Value.1': 'dopt-7eded312'
-        }
-
-        try:
-            self.assertUrlContainsQueryParams(url, expected_params_1)
-        except AssertionError:
-            # dict ordering is not guaranteed
-            self.assertUrlContainsQueryParams(url, expected_params_2)
+        self.assertUrlContainsQueryParams(url, expected_params)
 
         body = self.fixtures.load('describe_vpcs.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
@@ -1633,6 +1681,10 @@ class EC2MockHttp(MockHttp):
 
     def _CreateSubnet(self, method, url, body, headers):
         body = self.fixtures.load('create_subnet.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
+    def _ModifySubnetAttribute(self, method, url, body, headers):
+        body = self.fixtures.load('modify_subnet_attribute.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
 
     def _DeleteSubnet(self, method, url, body, headers):
@@ -1793,6 +1845,14 @@ class NimbusTests(EC2Tests):
         node = self.driver.list_nodes()[0]
         self.driver.ex_create_tags(resource=node, tags={'foo': 'bar'})
         self.assertExecutedMethodCount(0)
+
+    def test_create_volume_snapshot_with_tags(self):
+        vol = StorageVolume(id='vol-4282672b', name='test',
+                            state=StorageVolumeState.AVAILABLE,
+                            size=10, driver=self.driver)
+        snap = self.driver.create_volume_snapshot(
+            vol, 'Test snapshot', ex_metadata={'my_tag': 'test'})
+        self.assertDictEqual({}, snap.extra['tags'])
 
 
 class EucTests(LibcloudTestCase, TestCaseMixin):

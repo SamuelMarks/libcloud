@@ -24,15 +24,9 @@ Creating a Service Principal
 
 .. sourcecode:: bash
 
-  az login
-  az ad sp create-for-rbac -p "$AZURE_KEY_FILE" --name "$display_name" --password "$secret" --role 'API Management Service Contributor' --expanded-view
-
-Redundant rules: # TODO: Remove this
-
-  az ad app create --display-name $display_name --homepage "$homepage" --identifier-uris "$homepage" --password "$secret"
-  az ad sp create --id "$appId" # see output of^ for $appId
-  az role definition list
-  azure role assignment create --objectId "<Object_Id>" -o Owner -c /subscriptions/{subscriptionId}/
+  az ad app create --display-name "<Your Application Display Name>" --identifier-uris "<https://YouApplicationUri>" --password <Your_Password>
+  az ad sp create --id "<Application_Id>"
+  az role assignment create --assignee "<Object_Id>" --role Owner --scope /subscriptions/{subscriptionId}/
 
 Instantiating a driver
 ~~~~~~~~~~~~~~~~~~~~~~
