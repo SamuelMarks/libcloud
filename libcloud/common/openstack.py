@@ -360,7 +360,7 @@ class OpenStackResponse(Response):
         if self.has_content_type('application/xml'):
             try:
                 return ET.XML(self.body)
-            except:
+            except Exception:
                 raise MalformedResponseError(
                     'Failed to parse XML',
                     body=self.body,
@@ -369,7 +369,7 @@ class OpenStackResponse(Response):
         elif self.has_content_type('application/json'):
             try:
                 return json.loads(self.body)
-            except:
+            except Exception:
                 raise MalformedResponseError(
                     'Failed to parse JSON',
                     body=self.body,
@@ -378,7 +378,6 @@ class OpenStackResponse(Response):
             return self.body
 
     def parse_error(self):
-        text = None
         body = self.parse_body()
 
         if self.has_content_type('application/xml'):
@@ -391,7 +390,8 @@ class OpenStackResponse(Response):
             driver = self.connection.driver
             key_pair_name = context.get('key_pair_name', None)
 
-            if len(values) > 0 and values[0]['code'] == 404 and key_pair_name:
+            if len(values) > 0 and 'code' in values[0] and \
+                    values[0]['code'] == 404 and key_pair_name:
                 raise KeyPairDoesNotExistError(name=key_pair_name,
                                                driver=driver)
             elif len(values) > 0 and 'message' in values[0]:
